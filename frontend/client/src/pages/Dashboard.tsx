@@ -259,7 +259,7 @@ export default function Dashboard() {
           />
         </div>
         <div className="flex gap-2 w-full md:w-auto">
-          <Button variant="outline" className="flex-1 md:flex-none" onClick={fetchPolls}>
+          <Button variant="outline" className="flex-1 md:flex-none" onClick={() => fetchPolls()}>
             <RefreshCcw className="w-4 h-4 mr-2" /> Refresh
           </Button>
           {role === "creator" && (

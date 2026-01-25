@@ -1,7 +1,7 @@
 // The Poll program - privacy-preserving polls and surveys for LeoPulse
 // Supports configurable privacy: anonymous, semi-private, and identified voting
 
-program leopulse_poll.aleo {
+program leopulse_poll_v2.aleo {
     // ============================================
     // CONSTANTS
     // ============================================
