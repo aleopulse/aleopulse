@@ -69,7 +69,7 @@ function AleoWalletWrapper({ children }: { children: ReactNode }) {
       wallets={wallets}
       decryptPermission={DecryptPermission.UponRequest}
       network={aleoNetwork}
-      autoConnect={true}
+      autoConnect={false}  // Disabled to prevent race condition with extension initialization
     >
       <CustomWalletModalProvider>
         {children}

@@ -13,6 +13,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import { useNetwork } from "@/contexts/NetworkContext";
+import { DecryptPermission, WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 
 interface WalletSelectionModalProps {
   children: React.ReactNode;
@@ -36,7 +37,7 @@ const ALEO_WALLETS = [
 
 export function WalletSelectionModal({ children }: WalletSelectionModalProps) {
   const [open, setOpen] = useState(false);
-  const { wallets, select, connected, wallet } = useWallet();
+  const { wallets, select, connect, connected, wallet } = useWallet();
   const { setVisible } = useWalletModal();
   const { network } = useNetwork();
 
@@ -51,7 +52,18 @@ export function WalletSelectionModal({ children }: WalletSelectionModalProps) {
     try {
       const selectedWallet = wallets.find((w) => w.adapter.name === walletName);
       if (selectedWallet) {
+        // First select the wallet adapter
         select(selectedWallet.adapter.name);
+        // Give the adapter a moment to initialize, then connect
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Determine the network based on current selection
+        const aleoNetwork = network === "mainnet"
+          ? WalletAdapterNetwork.MainnetBeta
+          : WalletAdapterNetwork.TestnetBeta;
+
+        // Now actually connect to the wallet
+        await connect(DecryptPermission.UponRequest, aleoNetwork);
         setOpen(false);
       }
     } catch (error) {
