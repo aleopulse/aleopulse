@@ -89,6 +89,7 @@ export function useContract() {
           durationBlocks: input.durationSecs, // Treating seconds as blocks (~1 sec/block)
           fundAmount: BigInt(input.fundAmount),
           tokenId: config.pulseTokenId,
+          visibility: input.visibility ?? 0, // 0=Public, 1=Private
         });
 
         return { hash: txId || "", success: !!txId };
@@ -190,6 +191,86 @@ export function useContract() {
       }
     },
     [connected, executeTransaction, contractAddress]
+  );
+
+  // Issue invite to a private poll (requires PollTicket record)
+  const inviteToPoll = useCallback(
+    async (
+      pollTicketData: string, // Serialized PollTicket record
+      inviteeAddress: string,
+      canVote: boolean,
+      expiresBlock: number
+    ): Promise<TransactionResult> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        if (!connected) {
+          throw new Error("Wallet not connected");
+        }
+
+        const txId = await executeTransaction({
+          programId: contractAddress,
+          functionName: "invite_to_poll",
+          inputs: [
+            pollTicketData, // The PollTicket record
+            inviteeAddress,
+            canVote ? "true" : "false",
+            `${expiresBlock}u32`,
+          ],
+        });
+
+        return { hash: txId || "", success: !!txId };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to issue invite";
+        setError(message);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [connected, executeTransaction, contractAddress]
+  );
+
+  // Vote on a private poll using PollInvite record
+  const votePrivate = useCallback(
+    async (
+      pollInviteData: string, // Serialized PollInvite record
+      optionIndex: number
+    ): Promise<TransactionResult> => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        if (!connected) {
+          throw new Error("Wallet not connected");
+        }
+
+        const txId = await executeTransaction({
+          programId: contractAddress,
+          functionName: "vote_private",
+          inputs: [pollInviteData, `${optionIndex}u8`],
+        });
+
+        return { hash: txId || "", success: !!txId };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to vote on private poll";
+        setError(message);
+        throw err;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [connected, executeTransaction, contractAddress]
+  );
+
+  // Check if a poll is private
+  const isPollPrivate = useCallback(
+    async (pollId: number): Promise<boolean> => {
+      const value = await indexer.getMappingValue(contractAddress, "private_polls", `${pollId}u64`);
+      return value === "true";
+    },
+    [indexer, contractAddress]
   );
 
   // Start claims on a poll
@@ -653,6 +734,8 @@ export function useContract() {
     createPollsBatch,
     vote,
     bulkVote,
+    inviteToPoll,
+    votePrivate,
     startClaims,
     closePoll,
     fundPoll,
@@ -677,6 +760,7 @@ export function useContract() {
     getClaimPeriod,
     canFinalizePoll,
     isFAStoreInitialized,
+    isPollPrivate,
 
     // Questionnaire pool read functions
     hasCompletedQuestionnaire,

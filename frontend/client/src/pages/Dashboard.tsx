@@ -1,26 +1,44 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { PollCard } from "@/components/PollCard";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Filter, Search, RefreshCcw, AlertCircle } from "lucide-react";
+import { Plus, Filter, Search, RefreshCcw, AlertCircle, Loader2, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
+import { useNetwork } from "@/contexts/NetworkContext";
 import type { PollWithMeta } from "@/types/poll";
 import { getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
+import { toast } from "sonner";
+
+const PENDING_POLL_TX_KEY = "pending-poll-tx";
+const NORMAL_REFRESH_INTERVAL = 15000; // 15 seconds
+const AGGRESSIVE_REFRESH_INTERVAL = 5000; // 5 seconds when pending tx
 
 export default function Dashboard() {
   const [location] = useLocation();
   const { isConnected, address } = useWalletConnection();
   const { getAllPolls, getPollCount, contractAddress } = useContract();
+  const { config } = useNetwork();
 
   const [role, setRole] = useState<"creator" | "participant">("creator");
   const [polls, setPolls] = useState<PollWithMeta[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [pendingTxId, setPendingTxId] = useState<string | null>(null);
+  const previousPollCountRef = useRef<number>(0);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Check for pending transaction on mount
+  useEffect(() => {
+    const storedTx = sessionStorage.getItem(PENDING_POLL_TX_KEY);
+    if (storedTx) {
+      setPendingTxId(storedTx);
+    }
+  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -29,27 +47,63 @@ export default function Dashboard() {
   }, [location]);
 
   // Fetch all polls
-  const fetchPolls = useCallback(async () => {
+  const fetchPolls = useCallback(async (showLoading = true) => {
     if (!contractAddress) {
       setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
+    if (showLoading) {
+      setIsLoading(true);
+    }
     try {
       const allPolls = await getAllPolls();
       // Sort by ID descending (newest first)
-      setPolls(allPolls.sort((a, b) => b.id - a.id));
+      const sortedPolls = allPolls.sort((a, b) => b.id - a.id);
+
+      // Check if poll count increased (new poll appeared)
+      if (pendingTxId && sortedPolls.length > previousPollCountRef.current) {
+        // New poll appeared, clear pending transaction
+        sessionStorage.removeItem(PENDING_POLL_TX_KEY);
+        setPendingTxId(null);
+        toast.success("Your poll is now live!", {
+          description: "Your poll has been indexed and is visible to participants.",
+        });
+      }
+
+      previousPollCountRef.current = sortedPolls.length;
+      setPolls(sortedPolls);
     } catch (error) {
       console.error("Failed to fetch polls:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [getAllPolls, contractAddress]);
+  }, [getAllPolls, contractAddress, pendingTxId]);
 
   useEffect(() => {
     fetchPolls();
   }, [fetchPolls]);
+
+  // Auto-refresh interval - faster when pending tx exists
+  useEffect(() => {
+    // Clear existing interval
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+
+    // Set up new interval based on pending state
+    const interval = pendingTxId ? AGGRESSIVE_REFRESH_INTERVAL : NORMAL_REFRESH_INTERVAL;
+    refreshIntervalRef.current = setInterval(() => {
+      fetchPolls(false); // Don't show loading spinner on auto-refresh
+    }, interval);
+
+    // Cleanup on unmount or when pendingTxId changes
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+    };
+  }, [pendingTxId, fetchPolls]);
 
   // Filter polls by status and creator
   const activePolls = polls.filter((p) => p.isActive);
@@ -226,6 +280,35 @@ export default function Dashboard() {
             <p className="text-sm text-yellow-600 dark:text-yellow-400">
               Contract not available on this network. Please switch to testnet.
             </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Pending transaction banner */}
+      {pendingTxId && (
+        <Card className="border-primary/50 bg-primary/5 animate-pulse">
+          <CardContent className="flex items-center justify-between py-4">
+            <div className="flex items-center gap-3">
+              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+              <div>
+                <p className="text-sm font-medium text-primary">
+                  Your poll is being indexed...
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  This usually takes 10-30 seconds. The page will auto-refresh.
+                </p>
+              </div>
+            </div>
+            {config.explorerUrl && (
+              <a
+                href={`${config.explorerUrl}/transaction/${pendingTxId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                View Transaction <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
           </CardContent>
         </Card>
       )}
