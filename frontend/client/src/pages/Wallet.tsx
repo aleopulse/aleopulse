@@ -860,10 +860,10 @@ export default function WalletPage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start"
-                  onClick={() => window.open("https://faucet.movementnetwork.xyz/", "_blank")}
+                  onClick={() => window.open("https://faucet.aleo.org/", "_blank")}
                 >
                   <Droplets className="w-4 h-4 mr-2" />
-                  Movement Faucet
+                  Aleo Faucet
                 </Button>
               )}
             </CardContent>
@@ -874,7 +874,7 @@ export default function WalletPage() {
             <Alert variant="default" className="border-yellow-500/50 bg-yellow-500/10">
               <AlertTriangle className="h-4 w-4 text-yellow-500" />
               <AlertDescription className="text-yellow-600 dark:text-yellow-400 text-sm">
-                <strong>Mainnet:</strong> To fund your Privy wallet, send MOVE tokens from an exchange or another wallet.
+                <strong>Mainnet:</strong> To fund your wallet, send Aleo credits from an exchange or another wallet.
               </AlertDescription>
             </Alert>
           )}

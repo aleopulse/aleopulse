@@ -186,7 +186,7 @@ export default function PollDetails() {
       showTransactionSuccessToast(
         result.hash,
         "Vote Submitted!",
-        "Your vote has been recorded on the Movement network.",
+        "Your vote has been recorded on the Aleo network.",
         config.explorerUrl,
         result.sponsored
       );

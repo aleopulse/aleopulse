@@ -1,7 +1,7 @@
 /**
  * Hook for fetching user activity events
  * Uses React Query for caching and automatic refetching
- * Fetches data from Movement Indexer GraphQL API
+ * Fetches data from Aleo Indexer GraphQL API
  */
 
 import { useQuery } from "@tanstack/react-query";

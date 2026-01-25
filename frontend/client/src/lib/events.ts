@@ -1,6 +1,6 @@
 /**
  * Event fetching utilities for MVPulse
- * Uses Movement Indexer GraphQL API to fetch user activity
+ * Uses Aleo Indexer GraphQL API to fetch user activity
  */
 
 export interface ActivityEvent {
@@ -84,7 +84,7 @@ function mapEventTypeToActivityType(eventType: string): ActivityEvent['type'] {
 }
 
 /**
- * Fetch user activity from the Movement Indexer
+ * Fetch user activity from the Aleo Indexer
  * @param indexerUrl - The GraphQL Indexer endpoint URL
  * @param contractAddress - The poll contract address
  * @param userAddress - The user's wallet address

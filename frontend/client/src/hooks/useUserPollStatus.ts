@@ -1,6 +1,6 @@
 /**
  * Combined hook for fetching user's vote and claim status
- * Uses Movement Indexer when optimization is enabled for batch fetching
+ * Uses Aleo Indexer when optimization is enabled for batch fetching
  */
 
 import { useQuery } from "@tanstack/react-query";

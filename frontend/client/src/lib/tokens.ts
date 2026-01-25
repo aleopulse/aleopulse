@@ -8,7 +8,7 @@ export const COIN_TYPES = {
   PULSE: 1,   // PULSE token
   STABLE: 2,  // Stablecoin
   // Backward compatibility aliases
-  MOVE: 0,    // Alias for CREDITS (was MOVE on Movement)
+  MOVE: 0,    // Alias for CREDITS (legacy naming)
   USDC: 2,    // Alias for STABLE
 } as const;
 

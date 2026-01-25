@@ -280,7 +280,7 @@ export function PollCreationForm({
       showTransactionSuccessToast(
         result.hash,
         "Poll Created!",
-        "Your poll has been deployed to the Movement network.",
+        "Your poll has been deployed to the Aleo network.",
         config.explorerUrl,
         result.sponsored
       );

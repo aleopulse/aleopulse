@@ -22,7 +22,7 @@ interface NetworkConfig {
   explorerApiUrl: string;
   provableApiUrl: string;
   explorerUrl: string;
-  // Backward compatibility aliases (for code still referencing old Movement names)
+  // Backward compatibility aliases (for legacy code)
   contractAddress: string;      // Alias for pollProgramId
   stakingContractAddress: string; // Alias for stakingProgramId
   indexerUrl: string;           // Alias for explorerApiUrl

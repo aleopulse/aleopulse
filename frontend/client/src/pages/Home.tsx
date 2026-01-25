@@ -63,7 +63,7 @@ export default function Home() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
             </span>
-            Live on Movement Testnet
+            Live on Aleo Testnet
           </div>
           
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-display font-bold tracking-tighter leading-tight">
@@ -74,7 +74,7 @@ export default function Home() {
           </h1>
           
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            The first incentivized polling platform on Movement. Create surveys, earn rewards, and govern communities with on-chain transparency.
+            The first incentivized polling platform on Aleo. Create surveys, earn rewards, and govern communities with on-chain privacy.
           </p>
 
           <div className="flex flex-col sm:flex-row flex-wrap gap-4 justify-center pt-8">
@@ -150,7 +150,7 @@ export default function Home() {
           <div className="hidden md:block absolute top-12 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-primary/30 to-transparent -z-10" />
 
           {[
-            { step: 1, title: "Create Poll", desc: "Design your survey and set reward parameters in MOVE or USDC.", icon: FileCheck },
+            { step: 1, title: "Create Poll", desc: "Design your survey and set reward parameters in ALEO credits.", icon: FileCheck },
             { step: 2, title: "Community Votes", desc: "Verified users participate and cast their on-chain votes.", icon: Users },
             { step: 3, title: "Earn Rewards", desc: "Smart contracts automatically distribute funds to participants.", icon: Coins }
           ].map((item, i) => (
@@ -171,7 +171,7 @@ export default function Home() {
       {/* Features Grid */}
       <section className="py-24 px-4 bg-muted/5 container mx-auto relative z-20 rounded-3xl my-12 border border-border/50">
         <div className="text-center max-w-3xl mx-auto mb-16">
-          <h2 className="text-3xl md:text-5xl font-display font-bold mb-4">Why MovePoll?</h2>
+          <h2 className="text-3xl md:text-5xl font-display font-bold mb-4">Why AleoPulse?</h2>
           <p className="text-muted-foreground text-lg">Built for the next generation of decentralized communities.</p>
         </div>
 
@@ -179,7 +179,7 @@ export default function Home() {
           <div className="space-y-4 p-6 rounded-2xl bg-card/50 hover:bg-card transition-colors border border-border/50">
             <Zap className="w-8 h-8 text-primary" />
             <h3 className="text-xl font-bold">Instant Finality</h3>
-            <p className="text-muted-foreground">Powered by Movement's high-throughput network for real-time voting results.</p>
+            <p className="text-muted-foreground">Powered by Aleo's zero-knowledge proofs for private, verifiable voting.</p>
           </div>
           <div className="space-y-4 p-6 rounded-2xl bg-card/50 hover:bg-card transition-colors border border-border/50">
             <ShieldCheck className="w-8 h-8 text-accent" />
@@ -198,14 +198,14 @@ export default function Home() {
       <section className="py-24 container max-w-3xl mx-auto px-4">
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-5xl font-display font-bold mb-4">Frequently Asked Questions</h2>
-          <p className="text-muted-foreground">Everything you need to know about MovePoll.</p>
+          <p className="text-muted-foreground">Everything you need to know about AleoPulse.</p>
         </div>
 
         <Accordion type="single" collapsible className="w-full space-y-4">
           <AccordionItem value="item-1" className="border border-border/50 rounded-lg px-4 bg-card/30">
             <AccordionTrigger className="hover:no-underline font-medium text-lg">How do rewards work?</AccordionTrigger>
             <AccordionContent className="text-muted-foreground">
-              Creators deposit funds (MOVE or USDC) into a smart contract when creating a poll. These funds are automatically distributed to verified participants once the poll closes or the target response count is reached.
+              Creators deposit Aleo credits into a smart contract when creating a poll. These funds are automatically distributed to verified participants once the poll closes or the target response count is reached.
             </AccordionContent>
           </AccordionItem>
           <AccordionItem value="item-2" className="border border-border/50 rounded-lg px-4 bg-card/30">
@@ -217,13 +217,13 @@ export default function Home() {
           <AccordionItem value="item-3" className="border border-border/50 rounded-lg px-4 bg-card/30">
             <AccordionTrigger className="hover:no-underline font-medium text-lg">What is the platform fee?</AccordionTrigger>
             <AccordionContent className="text-muted-foreground">
-              MovePoll charges a small 1% protocol fee on distributed rewards to maintain the platform and fund the ecosystem treasury.
+              AleoPulse charges a small 2% protocol fee on distributed rewards to maintain the platform and fund the ecosystem treasury.
             </AccordionContent>
           </AccordionItem>
           <AccordionItem value="item-4" className="border border-border/50 rounded-lg px-4 bg-card/30">
             <AccordionTrigger className="hover:no-underline font-medium text-lg">Do I need a wallet to participate?</AccordionTrigger>
             <AccordionContent className="text-muted-foreground">
-              Yes, you need a Movement-compatible wallet to sign transactions and receive rewards.
+              Yes, you need an Aleo-compatible wallet like Leo Wallet to sign transactions and receive rewards.
             </AccordionContent>
           </AccordionItem>
         </Accordion>
@@ -235,7 +235,7 @@ export default function Home() {
           <div className="absolute inset-0 bg-grid-white/5 [mask-image:linear-gradient(0deg,white,transparent)]" />
           <div className="relative z-10 max-w-2xl mx-auto space-y-8">
             <h2 className="text-4xl md:text-5xl font-display font-bold">Ready to get started?</h2>
-            <p className="text-xl text-muted-foreground">Join thousands of communities using MovePoll to make better decisions.</p>
+            <p className="text-xl text-muted-foreground">Join communities using AleoPulse to make better decisions with privacy.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" className="text-lg px-8 bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setLocation('/create')}>
                 Launch a Poll

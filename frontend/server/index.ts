@@ -7,22 +7,22 @@ import { createProxyMiddleware } from "http-proxy-middleware";
 
 const app = express();
 
-// Proxy middleware for Movement Network RPC (to avoid CORS issues)
+// Proxy middleware for Aleo RPC (to avoid CORS issues)
 app.use(
-  "/api/movement-testnet",
+  "/api/aleo-testnet",
   createProxyMiddleware({
-    target: "https://testnet.movementnetwork.xyz",
+    target: "https://api.explorer.provable.com/v1/testnet",
     changeOrigin: true,
-    pathRewrite: { "^/api/movement-testnet": "" },
+    pathRewrite: { "^/api/aleo-testnet": "" },
   })
 );
 
 app.use(
-  "/api/movement-mainnet",
+  "/api/aleo-mainnet",
   createProxyMiddleware({
-    target: "https://mainnet.movementnetwork.xyz",
+    target: "https://api.explorer.provable.com/v1/mainnet",
     changeOrigin: true,
-    pathRewrite: { "^/api/movement-mainnet": "" },
+    pathRewrite: { "^/api/aleo-mainnet": "" },
   })
 );
 const httpServer = createServer(app);

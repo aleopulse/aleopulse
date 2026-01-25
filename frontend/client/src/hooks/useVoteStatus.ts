@@ -1,6 +1,6 @@
 /**
  * Hook for fetching user's vote status across all polls
- * Uses Movement Indexer when optimization is enabled
+ * Uses Aleo Indexer when optimization is enabled
  * Falls back to RPC calls when disabled
  */
 

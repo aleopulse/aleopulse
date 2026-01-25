@@ -49,16 +49,16 @@ export default defineConfig({
       deny: ["**/.*"],
     },
     proxy: {
-      "/api/movement-testnet": {
-        target: "https://testnet.movementnetwork.xyz",
+      "/api/aleo-testnet": {
+        target: "https://api.explorer.provable.com/v1/testnet",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/movement-testnet/, ""),
+        rewrite: (path) => path.replace(/^\/api\/aleo-testnet/, ""),
         secure: true,
       },
-      "/api/movement-mainnet": {
-        target: "https://mainnet.movementnetwork.xyz",
+      "/api/aleo-mainnet": {
+        target: "https://api.explorer.provable.com/v1/mainnet",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/movement-mainnet/, ""),
+        rewrite: (path) => path.replace(/^\/api\/aleo-mainnet/, ""),
         secure: true,
       },
     },

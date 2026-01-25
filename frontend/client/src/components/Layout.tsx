@@ -80,7 +80,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">MovePoll</span>
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70">AleoPulse</span>
             </Link>
           </div>
 
@@ -258,10 +258,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                   </svg>
                 </div>
-                <span>MovePoll</span>
+                <span>AleoPulse</span>
               </Link>
               <p className="text-sm text-muted-foreground">
-                Decentralized insights for the Movement ecosystem. Built for transparency, speed, and community governance.
+                Decentralized insights for the Aleo ecosystem. Built for privacy, transparency, and community governance.
               </p>
             </div>
             <div>
@@ -293,7 +293,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </div>
           <div className="pt-8 border-t border-border/50 flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
-            <p>© 2025 MovePoll. All rights reserved.</p>
+            <p>© 2025 AleoPulse. All rights reserved.</p>
             <div className="flex gap-6">
               <a href="#" className="hover:text-foreground">Privacy Policy</a>
               <a href="#" className="hover:text-foreground">Terms of Service</a>

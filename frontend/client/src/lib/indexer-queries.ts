@@ -1,5 +1,5 @@
 /**
- * GraphQL queries for Movement Indexer
+ * GraphQL queries for Aleo Indexer
  * Used for batch fetching vote and claim status
  */
 

@@ -449,7 +449,7 @@ export default function Admin() {
             <div className="flex-1">
               <p className="font-medium">Indexer Optimization</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Uses Movement Indexer for faster data retrieval. Enables parallel RPC calls,
+                Uses Aleo Indexer for faster data retrieval. Enables parallel RPC calls,
                 React Query caching (60s), and batch vote/claim status checks.
               </p>
               <p className="text-xs text-muted-foreground mt-2 font-mono">
