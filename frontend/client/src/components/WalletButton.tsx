@@ -1,6 +1,7 @@
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
-import { useWalletModal } from "@demox-labs/aleo-wallet-adapter-reactui";
+import { useWalletModal } from "@/components/WalletProvider";
 import { Button } from "@/components/ui/button";
+import { WalletConnectModal } from "@/components/WalletConnectModal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,12 +48,17 @@ export function WalletButton() {
     setVisible(true);
   };
 
+  const { visible } = useWalletModal();
+
   if (!connected) {
     return (
-      <Button variant="outline" size="sm" className="gap-2" onClick={handleConnect}>
-        <Wallet className="w-4 h-4" />
-        Connect Wallet
-      </Button>
+      <>
+        <Button variant="outline" size="sm" className="gap-2" onClick={handleConnect}>
+          <Wallet className="w-4 h-4" />
+          Connect Wallet
+        </Button>
+        <WalletConnectModal open={visible} onOpenChange={setVisible} />
+      </>
     );
   }
 

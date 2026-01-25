@@ -1,21 +1,21 @@
-import { useState } from "react";
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
-import { useWalletModal } from "@/components/WalletProvider";
-import { Button } from "@/components/ui/button";
+import type { WalletName } from "@demox-labs/aleo-wallet-adapter-base";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, ExternalLink } from "lucide-react";
+import { AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
 import { useNetwork } from "@/contexts/NetworkContext";
+import { useEffect } from "react";
 
-interface WalletSelectionModalProps {
-  children: React.ReactNode;
+interface WalletConnectModalProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 // Supported Aleo wallets
@@ -34,37 +34,39 @@ const ALEO_WALLETS = [
   },
 ];
 
-export function WalletSelectionModal({ children }: WalletSelectionModalProps) {
-  const [open, setOpen] = useState(false);
-  const { wallets, select, connected, wallet } = useWallet();
-  const { setVisible } = useWalletModal();
+export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalProps) {
+  const { wallets, select, connecting, connected } = useWallet();
   const { network } = useNetwork();
 
   const isMainnet = network === "mainnet";
 
-  const handleOpenWalletModal = () => {
-    setOpen(false);
-    setVisible(true);
-  };
+  // Close modal when connected
+  useEffect(() => {
+    if (connected && open) {
+      onOpenChange(false);
+    }
+  }, [connected, open, onOpenChange]);
 
-  const handleWalletSelect = async (walletName: string) => {
+  const handleWalletSelect = async (walletName: WalletName) => {
     try {
-      const selectedWallet = wallets.find((w) => w.adapter.name === walletName);
-      if (selectedWallet) {
-        select(selectedWallet.adapter.name);
-        setOpen(false);
-      }
+      select(walletName);
     } catch (error) {
       console.error("Failed to connect wallet:", error);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Connect Wallet</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 17L12 22L22 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            Connect to AleoPulse
+          </DialogTitle>
           <DialogDescription>
             Choose an Aleo wallet to connect
           </DialogDescription>
@@ -80,37 +82,40 @@ export function WalletSelectionModal({ children }: WalletSelectionModalProps) {
             </Alert>
           )}
 
-          {/* Primary action - use wallet adapter modal */}
-          <Button
-            variant="default"
-            className="w-full justify-center h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium"
-            onClick={handleOpenWalletModal}
-          >
-            Connect with Aleo Wallet
-          </Button>
+          {/* Connecting state */}
+          {connecting && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <span className="ml-3 text-muted-foreground">Connecting...</span>
+            </div>
+          )}
 
           {/* Available wallets from adapter */}
-          {wallets.length > 0 && (
+          {!connecting && wallets.length > 0 && (
             <div className="space-y-2">
-              <p className="text-sm text-muted-foreground text-center">
-                Detected wallets:
+              <p className="text-sm text-muted-foreground text-center mb-3">
+                Select a wallet to connect:
               </p>
               {wallets.map((w) => (
                 <Button
                   key={w.adapter.name}
                   variant="outline"
-                  className="w-full justify-start h-12 hover:bg-accent"
-                  onClick={() => handleWalletSelect(w.adapter.name)}
+                  className="w-full justify-start h-14 hover:bg-accent hover:border-primary/50 transition-all"
+                  onClick={() => handleWalletSelect(w.adapter.name as WalletName)}
+                  disabled={connecting}
                 >
                   <div className="flex items-center space-x-3">
                     {w.adapter.icon && (
                       <img
                         src={w.adapter.icon}
                         alt={w.adapter.name}
-                        className="w-6 h-6 rounded"
+                        className="w-8 h-8 rounded-lg"
                       />
                     )}
-                    <span className="font-medium">{w.adapter.name}</span>
+                    <div className="text-left">
+                      <span className="font-medium block">{w.adapter.name}</span>
+                      <span className="text-xs text-muted-foreground">Click to connect</span>
+                    </div>
                   </div>
                 </Button>
               ))}
@@ -118,7 +123,7 @@ export function WalletSelectionModal({ children }: WalletSelectionModalProps) {
           )}
 
           {/* No wallets detected */}
-          {wallets.length === 0 && (
+          {!connecting && wallets.length === 0 && (
             <div className="space-y-3">
               <div className="text-center py-4 border border-dashed rounded-lg">
                 <p className="text-sm text-muted-foreground mb-3">

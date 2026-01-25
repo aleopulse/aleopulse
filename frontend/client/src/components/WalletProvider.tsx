@@ -1,7 +1,6 @@
-import { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, createContext, useContext, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { WalletProvider as AleoWalletProvider } from "@demox-labs/aleo-wallet-adapter-react";
-import { WalletModalProvider } from "@demox-labs/aleo-wallet-adapter-reactui";
 import { LeoWalletAdapter } from "@demox-labs/aleo-wallet-adapter-leo";
 import { DecryptPermission, WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 import { NetworkProvider, useNetwork } from "@/contexts/NetworkContext";
@@ -14,19 +13,46 @@ interface WalletProviderProps {
   children: ReactNode;
 }
 
+// Custom wallet modal context to replace the library's modal (React 19 compatibility)
+interface WalletModalContextType {
+  visible: boolean;
+  setVisible: (visible: boolean) => void;
+}
+
+const WalletModalContext = createContext<WalletModalContextType>({
+  visible: false,
+  setVisible: () => {},
+});
+
+export function useWalletModal() {
+  return useContext(WalletModalContext);
+}
+
+// Custom wallet modal provider
+function CustomWalletModalProvider({ children }: { children: ReactNode }) {
+  const [visible, setVisible] = useState(false);
+
+  const value = useMemo(() => ({
+    visible,
+    setVisible,
+  }), [visible]);
+
+  return (
+    <WalletModalContext.Provider value={value}>
+      {children}
+    </WalletModalContext.Provider>
+  );
+}
+
 // Inner component that wraps the Aleo wallet adapter
 function AleoWalletWrapper({ children }: { children: ReactNode }) {
   const { network } = useNetwork();
 
   // Configure wallets based on network
   const wallets = useMemo(() => {
-    const adapterNetwork = network === "mainnet"
-      ? WalletAdapterNetwork.MainnetBeta
-      : WalletAdapterNetwork.TestnetBeta;
-
     return [
       new LeoWalletAdapter({
-        appName: "LeoPulse",
+        appName: "AleoPulse",
       }),
     ];
   }, [network]);
@@ -45,9 +71,9 @@ function AleoWalletWrapper({ children }: { children: ReactNode }) {
       network={aleoNetwork}
       autoConnect={true}
     >
-      <WalletModalProvider>
+      <CustomWalletModalProvider>
         {children}
-      </WalletModalProvider>
+      </CustomWalletModalProvider>
     </AleoWalletProvider>
   );
 }
