@@ -1,0 +1,3881 @@
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { eq, and, desc, sql, gte } from "drizzle-orm";
+// Shinami and Aptos SDK removed - not applicable for Aleo
+import { db } from "./db";
+import {
+  userProfiles,
+  seasons,
+  quests,
+  questProgress,
+  dailyVoteLogs,
+  seasonLeaderboard,
+  userSeasonSnapshots,
+  sponsorshipLogs,
+  userSettings,
+  referralCodes,
+  referrals,
+  referralMilestones,
+  referralStats,
+  questionnaires,
+  questionnairePolls,
+  questionnaireProgress,
+  projects,
+  projectCollaborators,
+  projectPolls,
+  projectQuestionnaires,
+  projectInsights,
+  faucetClaims,
+  TIERS,
+  TIER_VOTE_LIMITS,
+  TIER_PULSE_THRESHOLDS,
+  QUEST_TYPES,
+  SEASON_STATUS,
+  REFERRAL_STATUS,
+  REFERRAL_MILESTONES,
+  REFERRAL_REWARDS,
+  REFERRAL_TIERS,
+  REFERRAL_TIER_THRESHOLDS,
+  REFERRAL_TIER_MULTIPLIERS,
+  QUESTIONNAIRE_STATUS,
+  QUESTIONNAIRE_REWARD_TYPE,
+  PROJECT_STATUS,
+  PROJECT_ROLE,
+  type UserProfile,
+  type Season,
+  type Quest,
+  type Questionnaire,
+  type QuestionnairePoll,
+  type QuestionnaireProgress,
+  type Project,
+  type ProjectCollaborator,
+  type ProjectPoll,
+  type ProjectQuestionnaire,
+  type ProjectInsight,
+} from "@shared/schema";
+
+// ============================================
+// Gas Sponsorship Constants
+// ============================================
+
+const DAILY_SPONSORSHIP_LIMIT = 50; // Max sponsored transactions per address per day
+
+// ============================================
+// Helper Functions
+// ============================================
+
+/**
+ * Calculate tier based on PULSE holdings (balance + staked) and streak
+ * Tier is determined by total PULSE (wallet balance + staked amount)
+ */
+function calculateTier(
+  pulseBalance: bigint | string,
+  stakedPulse: bigint | string,
+  streak: number
+): number {
+  const balance = typeof pulseBalance === "string" ? BigInt(pulseBalance) : pulseBalance;
+  const staked = typeof stakedPulse === "string" ? BigInt(stakedPulse) : stakedPulse;
+  const totalPulse = balance + staked;
+
+  // Determine tier from total PULSE (balance + staked)
+  let tierFromPulse: number = TIERS.BRONZE;
+  if (totalPulse >= BigInt(TIER_PULSE_THRESHOLDS[TIERS.PLATINUM])) {
+    tierFromPulse = TIERS.PLATINUM;
+  } else if (totalPulse >= BigInt(TIER_PULSE_THRESHOLDS[TIERS.GOLD])) {
+    tierFromPulse = TIERS.GOLD;
+  } else if (totalPulse >= BigInt(TIER_PULSE_THRESHOLDS[TIERS.SILVER])) {
+    tierFromPulse = TIERS.SILVER;
+  }
+
+  // Streak bonuses: 7+ days = +1 tier, 30+ days = +2 tiers
+  const streakBonus = streak >= 30 ? 2 : streak >= 7 ? 1 : 0;
+
+  // Cap at Platinum
+  return Math.min(tierFromPulse + streakBonus, TIERS.PLATINUM);
+}
+
+/**
+ * Get today's date string (YYYY-MM-DD) in UTC
+ */
+function getTodayString(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
+/**
+ * Get yesterday's date string (YYYY-MM-DD) in UTC
+ */
+function getYesterdayString(): string {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return yesterday.toISOString().split("T")[0];
+}
+
+/**
+ * Get or create user profile
+ */
+async function getOrCreateProfile(walletAddress: string): Promise<UserProfile> {
+  const normalizedAddress = walletAddress.toLowerCase();
+
+  // Try to find existing profile
+  const [existing] = await db
+    .select()
+    .from(userProfiles)
+    .where(eq(userProfiles.walletAddress, normalizedAddress))
+    .limit(1);
+
+  if (existing) {
+    return existing;
+  }
+
+  // Create new profile
+  const [newProfile] = await db
+    .insert(userProfiles)
+    .values({
+      walletAddress: normalizedAddress,
+      currentStreak: 0,
+      longestStreak: 0,
+      votesToday: 0,
+      seasonPoints: 0,
+      seasonVotes: 0,
+      cachedTier: TIERS.BRONZE,
+      cachedPulseBalance: "0",
+      cachedStakedPulse: "0",
+    })
+    .returning();
+
+  return newProfile;
+}
+
+export async function registerRoutes(
+  httpServer: Server,
+  app: Express
+): Promise<Server> {
+  // ============================================
+  // User Profile Routes
+  // ============================================
+
+  /**
+   * GET /api/user/profile/:address
+   * Get user profile with calculated tier
+   */
+  app.get("/api/user/profile/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const profile = await getOrCreateProfile(address);
+
+      // Check if we need to reset daily votes (new day)
+      const today = getTodayString();
+      if (profile.lastVoteResetDate !== today) {
+        // Reset votes for new day
+        await db
+          .update(userProfiles)
+          .set({
+            votesToday: 0,
+            lastVoteResetDate: today,
+            updatedAt: new Date(),
+          })
+          .where(eq(userProfiles.id, profile.id));
+
+        profile.votesToday = 0;
+        profile.lastVoteResetDate = today;
+      }
+
+      // Calculate tier (uses balance + staked)
+      const tier = calculateTier(profile.cachedPulseBalance, profile.cachedStakedPulse, profile.currentStreak);
+      const voteLimit = TIER_VOTE_LIMITS[tier as keyof typeof TIER_VOTE_LIMITS];
+
+      res.json({
+        success: true,
+        data: {
+          ...profile,
+          tier,
+          voteLimit,
+          votesRemaining: Math.max(0, voteLimit - profile.votesToday),
+          canVote: profile.votesToday < voteLimit,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch profile" });
+    }
+  });
+
+  /**
+   * POST /api/user/sync-tier/:address
+   * Recalculate tier from on-chain PULSE balance and staked amount
+   */
+  app.post("/api/user/sync-tier/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const { pulseBalance, stakedAmount } = req.body; // Frontend sends both balance and staked amount
+
+      if (pulseBalance === undefined) {
+        return res.status(400).json({ success: false, error: "pulseBalance is required" });
+      }
+
+      const profile = await getOrCreateProfile(address);
+      // Use provided stakedAmount or fall back to cached value
+      const staked = stakedAmount !== undefined ? stakedAmount.toString() : profile.cachedStakedPulse;
+      const tier = calculateTier(pulseBalance, staked, profile.currentStreak);
+
+      // Update cached tier, balance, and staked amount
+      const [updated] = await db
+        .update(userProfiles)
+        .set({
+          cachedTier: tier,
+          cachedPulseBalance: pulseBalance.toString(),
+          cachedStakedPulse: staked,
+          tierLastUpdated: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfiles.id, profile.id))
+        .returning();
+
+      const voteLimit = TIER_VOTE_LIMITS[tier as keyof typeof TIER_VOTE_LIMITS];
+
+      res.json({
+        success: true,
+        data: {
+          ...updated,
+          tier,
+          voteLimit,
+          votesRemaining: Math.max(0, voteLimit - updated.votesToday),
+          canVote: updated.votesToday < voteLimit,
+        },
+      });
+    } catch (error) {
+      console.error("Error syncing tier:", error);
+      res.status(500).json({ success: false, error: "Failed to sync tier" });
+    }
+  });
+
+  // ============================================
+  // Vote Limit Routes
+  // ============================================
+
+  /**
+   * GET /api/votes/remaining/:address
+   * Get remaining votes for today
+   */
+  app.get("/api/votes/remaining/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const profile = await getOrCreateProfile(address);
+
+      const today = getTodayString();
+      let votesToday = profile.votesToday;
+
+      // Reset if new day
+      if (profile.lastVoteResetDate !== today) {
+        votesToday = 0;
+      }
+
+      const tier = calculateTier(profile.cachedPulseBalance, profile.cachedStakedPulse, profile.currentStreak);
+      const voteLimit = TIER_VOTE_LIMITS[tier as keyof typeof TIER_VOTE_LIMITS];
+
+      res.json({
+        success: true,
+        data: {
+          tier,
+          voteLimit,
+          votesUsed: votesToday,
+          votesRemaining: Math.max(0, voteLimit - votesToday),
+          canVote: votesToday < voteLimit,
+          streak: profile.currentStreak,
+        },
+      });
+    } catch (error) {
+      console.error("Error getting remaining votes:", error);
+      res.status(500).json({ success: false, error: "Failed to get remaining votes" });
+    }
+  });
+
+  /**
+   * POST /api/votes/record/:address
+   * Record a vote (called after successful on-chain vote)
+   */
+  app.post("/api/votes/record/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const { pollId, network = "testnet" } = req.body;
+
+      // Validate network parameter
+      const validNetwork = network === "mainnet" ? "mainnet" : "testnet";
+
+      const profile = await getOrCreateProfile(address);
+      const today = getTodayString();
+      const yesterday = getYesterdayString();
+
+      // Check if this is the first vote of the day
+      const isFirstVoteOfDay = profile.lastVoteDate !== today;
+
+      // Calculate new streak
+      let newStreak = profile.currentStreak;
+      if (isFirstVoteOfDay) {
+        if (profile.lastVoteDate === yesterday) {
+          // Continue streak
+          newStreak = profile.currentStreak + 1;
+        } else {
+          // Reset streak (missed a day)
+          newStreak = 1;
+        }
+      }
+
+      const longestStreak = Math.max(profile.longestStreak, newStreak);
+
+      // Reset votesToday if new day
+      let votesToday = profile.votesToday;
+      if (profile.lastVoteResetDate !== today) {
+        votesToday = 0;
+      }
+
+      // Increment votes
+      votesToday += 1;
+
+      // Update profile
+      const [updated] = await db
+        .update(userProfiles)
+        .set({
+          votesToday,
+          currentStreak: newStreak,
+          longestStreak,
+          lastVoteDate: today,
+          lastVoteResetDate: today,
+          seasonVotes: profile.seasonVotes + 1,
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfiles.id, profile.id))
+        .returning();
+
+      // Log daily vote (network-specific)
+      const [existingLog] = await db
+        .select()
+        .from(dailyVoteLogs)
+        .where(
+          and(
+            eq(dailyVoteLogs.walletAddress, profile.walletAddress),
+            eq(dailyVoteLogs.voteDate, today),
+            eq(dailyVoteLogs.network, validNetwork)
+          )
+        )
+        .limit(1);
+
+      if (existingLog) {
+        // Update existing log
+        const pollIds = existingLog.pollIds || [];
+        if (pollId && !pollIds.includes(pollId)) {
+          pollIds.push(pollId);
+        }
+        await db
+          .update(dailyVoteLogs)
+          .set({
+            voteCount: existingLog.voteCount + 1,
+            pollIds,
+          })
+          .where(eq(dailyVoteLogs.id, existingLog.id));
+      } else {
+        // Create new log
+        await db.insert(dailyVoteLogs).values({
+          walletAddress: profile.walletAddress,
+          voteDate: today,
+          voteCount: 1,
+          pollIds: pollId ? [pollId] : [],
+          network: validNetwork,
+        });
+      }
+
+      // Update quest progress for vote-related quests
+      // (This would trigger quest progress updates)
+
+      // Check and award referral milestones based on total votes
+      try {
+        await checkReferralMilestones(profile.walletAddress, updated.seasonVotes);
+      } catch (refError) {
+        console.error("Error checking referral milestones:", refError);
+        // Don't fail the vote recording if referral check fails
+      }
+
+      const tier = calculateTier(updated.cachedPulseBalance, updated.cachedStakedPulse, updated.currentStreak);
+      const voteLimit = TIER_VOTE_LIMITS[tier as keyof typeof TIER_VOTE_LIMITS];
+
+      res.json({
+        success: true,
+        data: {
+          ...updated,
+          tier,
+          voteLimit,
+          votesRemaining: Math.max(0, voteLimit - updated.votesToday),
+          canVote: updated.votesToday < voteLimit,
+          streakIncreased: isFirstVoteOfDay,
+          newStreak,
+        },
+      });
+    } catch (error) {
+      console.error("Error recording vote:", error);
+      res.status(500).json({ success: false, error: "Failed to record vote" });
+    }
+  });
+
+  // ============================================
+  // Season Lifecycle Helper Functions
+  // ============================================
+
+  /**
+   * End a season: create snapshots for all users, reset points, deactivate quests
+   */
+  async function endSeason(seasonId: string): Promise<void> {
+    // 1. Update season status to ENDED
+    await db
+      .update(seasons)
+      .set({ status: SEASON_STATUS.ENDED, updatedAt: new Date() })
+      .where(eq(seasons.id, seasonId));
+
+    // 2. Get all leaderboard entries ordered by points (for rank calculation)
+    const leaderboardEntries = await db
+      .select()
+      .from(seasonLeaderboard)
+      .where(eq(seasonLeaderboard.seasonId, seasonId))
+      .orderBy(desc(seasonLeaderboard.totalPoints));
+
+    // 3. Create snapshots for each user with their final rank
+    for (let i = 0; i < leaderboardEntries.length; i++) {
+      const entry = leaderboardEntries[i];
+      const rank = i + 1;
+
+      // Get user profile for additional data
+      const [profile] = await db
+        .select()
+        .from(userProfiles)
+        .where(eq(userProfiles.walletAddress, entry.walletAddress))
+        .limit(1);
+
+      // Create snapshot
+      await db.insert(userSeasonSnapshots).values({
+        seasonId,
+        walletAddress: entry.walletAddress,
+        finalTier: profile?.cachedTier || 0,
+        finalRank: rank,
+        totalPoints: entry.totalPoints,
+        totalVotes: entry.totalVotes,
+        pulseBalanceSnapshot: profile?.cachedPulseBalance || "0",
+        maxStreak: profile?.longestStreak || 0,
+        questsCompleted: entry.questsCompleted,
+      });
+    }
+
+    // 4. Reset seasonPoints and seasonVotes for users in this season
+    // Note: We identify users by their leaderboard entries
+    for (const entry of leaderboardEntries) {
+      await db
+        .update(userProfiles)
+        .set({
+          seasonPoints: 0,
+          seasonVotes: 0,
+          currentSeasonId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfiles.walletAddress, entry.walletAddress));
+    }
+
+    // 5. Deactivate all quests for this season
+    await db
+      .update(quests)
+      .set({ active: false, updatedAt: new Date() })
+      .where(eq(quests.seasonId, seasonId));
+
+    console.log(`Season ${seasonId} ended: ${leaderboardEntries.length} snapshots created`);
+  }
+
+  /**
+   * Check for expired seasons and auto-end them
+   * Returns the number of seasons that were auto-ended
+   */
+  async function checkAndEndExpiredSeasons(): Promise<number> {
+    const now = new Date().toISOString();
+
+    // Find active seasons past their end time
+    const expiredSeasons = await db
+      .select()
+      .from(seasons)
+      .where(
+        and(
+          eq(seasons.status, SEASON_STATUS.ACTIVE),
+          sql`${seasons.endTime} <= ${now}`
+        )
+      );
+
+    // End each expired season
+    for (const season of expiredSeasons) {
+      try {
+        await endSeason(season.id);
+        console.log(`Auto-ended expired season: ${season.name} (${season.id})`);
+      } catch (error) {
+        console.error(`Failed to auto-end season ${season.id}:`, error);
+      }
+    }
+
+    return expiredSeasons.length;
+  }
+
+  // ============================================
+  // Season Routes
+  // ============================================
+
+  /**
+   * GET /api/seasons
+   * List all seasons with optional status filter
+   */
+  app.get("/api/seasons", async (req, res) => {
+    try {
+      const { status, limit: limitParam, offset: offsetParam } = req.query;
+      const limit = parseInt(limitParam as string) || 20;
+      const offset = parseInt(offsetParam as string) || 0;
+
+      let query = db.select().from(seasons);
+
+      if (status !== undefined && status !== "") {
+        query = query.where(eq(seasons.status, parseInt(status as string))) as typeof query;
+      }
+
+      const allSeasons = await query
+        .orderBy(desc(seasons.seasonNumber))
+        .limit(limit)
+        .offset(offset);
+
+      res.json({ success: true, data: allSeasons });
+    } catch (error) {
+      console.error("Error fetching seasons:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch seasons" });
+    }
+  });
+
+  /**
+   * GET /api/seasons/current
+   * Get the current active season (with auto-end check)
+   */
+  app.get("/api/seasons/current", async (req, res) => {
+    try {
+      // Auto-end any expired seasons first
+      await checkAndEndExpiredSeasons();
+
+      const [currentSeason] = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.status, SEASON_STATUS.ACTIVE))
+        .limit(1);
+
+      if (!currentSeason) {
+        return res.json({ success: true, season: null });
+      }
+
+      res.json({ success: true, season: currentSeason });
+    } catch (error) {
+      console.error("Error fetching current season:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch season" });
+    }
+  });
+
+  /**
+   * GET /api/seasons/:seasonId
+   * Get season details with stats
+   */
+  app.get("/api/seasons/:seasonId", async (req, res) => {
+    try {
+      const { seasonId } = req.params;
+
+      // Handle "current" as a special case
+      if (seasonId === "current") {
+        await checkAndEndExpiredSeasons();
+        const [currentSeason] = await db
+          .select()
+          .from(seasons)
+          .where(eq(seasons.status, SEASON_STATUS.ACTIVE))
+          .limit(1);
+        return res.json({ success: true, data: currentSeason || null });
+      }
+
+      const [season] = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.id, seasonId))
+        .limit(1);
+
+      if (!season) {
+        return res.status(404).json({ success: false, error: "Season not found" });
+      }
+
+      // Get participant count
+      const [countResult] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(seasonLeaderboard)
+        .where(eq(seasonLeaderboard.seasonId, seasonId));
+
+      // Get total points distributed
+      const [pointsResult] = await db
+        .select({ total: sql<number>`coalesce(sum(${seasonLeaderboard.totalPoints}), 0)` })
+        .from(seasonLeaderboard)
+        .where(eq(seasonLeaderboard.seasonId, seasonId));
+
+      res.json({
+        success: true,
+        data: {
+          ...season,
+          participantCount: countResult?.count || 0,
+          totalPointsDistributed: pointsResult?.total || 0,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching season:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch season" });
+    }
+  });
+
+  /**
+   * GET /api/seasons/:seasonId/leaderboard
+   * Get leaderboard for a season
+   */
+  app.get("/api/seasons/:seasonId/leaderboard", async (req, res) => {
+    try {
+      const { seasonId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const leaderboard = await db
+        .select()
+        .from(seasonLeaderboard)
+        .where(eq(seasonLeaderboard.seasonId, seasonId))
+        .orderBy(desc(seasonLeaderboard.totalPoints))
+        .limit(limit)
+        .offset(offset);
+
+      res.json({ success: true, data: leaderboard });
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch leaderboard" });
+    }
+  });
+
+  /**
+   * GET /api/seasons/:seasonId/user/:address
+   * Get user's stats for a season
+   */
+  app.get("/api/seasons/:seasonId/user/:address", async (req, res) => {
+    try {
+      const { seasonId, address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      // Get user's leaderboard entry
+      const [entry] = await db
+        .select()
+        .from(seasonLeaderboard)
+        .where(
+          and(
+            eq(seasonLeaderboard.seasonId, seasonId),
+            eq(seasonLeaderboard.walletAddress, normalizedAddress)
+          )
+        )
+        .limit(1);
+
+      // Calculate rank if not stored
+      let rank = entry?.rank;
+      if (!rank && entry) {
+        const [countResult] = await db
+          .select({ count: sql<number>`count(*)` })
+          .from(seasonLeaderboard)
+          .where(
+            and(
+              eq(seasonLeaderboard.seasonId, seasonId),
+              sql`${seasonLeaderboard.totalPoints} > ${entry.totalPoints}`
+            )
+          );
+        rank = (countResult?.count || 0) + 1;
+      }
+
+      res.json({
+        success: true,
+        data: entry ? { ...entry, rank } : null,
+      });
+    } catch (error) {
+      console.error("Error fetching user season stats:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch stats" });
+    }
+  });
+
+  // ============================================
+  // Quest Routes
+  // ============================================
+
+  /**
+   * GET /api/quests/active/:seasonId
+   * Get active quests for a season
+   */
+  app.get("/api/quests/active/:seasonId", async (req, res) => {
+    try {
+      const { seasonId } = req.params;
+
+      const activeQuests = await db
+        .select()
+        .from(quests)
+        .where(
+          and(
+            eq(quests.seasonId, seasonId),
+            eq(quests.active, true)
+          )
+        )
+        .orderBy(quests.questType, quests.points);
+
+      res.json({ success: true, quests: activeQuests });
+    } catch (error) {
+      console.error("Error fetching quests:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch quests" });
+    }
+  });
+
+  /**
+   * GET /api/quests/creator/:address
+   * Get quests created by a specific address
+   */
+  app.get("/api/quests/creator/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const { seasonId } = req.query;
+      const normalizedAddress = address.toLowerCase();
+
+      let query = db
+        .select()
+        .from(quests)
+        .where(eq(quests.creatorAddress, normalizedAddress));
+
+      if (seasonId && typeof seasonId === "string") {
+        query = db
+          .select()
+          .from(quests)
+          .where(
+            and(
+              eq(quests.creatorAddress, normalizedAddress),
+              eq(quests.seasonId, seasonId)
+            )
+          );
+      }
+
+      const creatorQuests = await query.orderBy(quests.questType, quests.createdAt);
+
+      res.json({ success: true, quests: creatorQuests });
+    } catch (error) {
+      console.error("Error fetching creator quests:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch quests" });
+    }
+  });
+
+  /**
+   * GET /api/quests/progress/:address/:seasonId
+   * Get user's progress on all quests
+   */
+  app.get("/api/quests/progress/:address/:seasonId", async (req, res) => {
+    try {
+      const { address, seasonId } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      const progress = await db
+        .select()
+        .from(questProgress)
+        .where(
+          and(
+            eq(questProgress.walletAddress, normalizedAddress),
+            eq(questProgress.seasonId, seasonId)
+          )
+        );
+
+      res.json({ success: true, data: progress });
+    } catch (error) {
+      console.error("Error fetching quest progress:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch progress" });
+    }
+  });
+
+  /**
+   * POST /api/quests/claim/:address/:questId
+   * Claim points for a completed quest
+   */
+  app.post("/api/quests/claim/:address/:questId", async (req, res) => {
+    try {
+      const { address, questId } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      // Get quest and progress
+      const [quest] = await db
+        .select()
+        .from(quests)
+        .where(eq(quests.id, questId))
+        .limit(1);
+
+      if (!quest) {
+        return res.status(404).json({ success: false, error: "Quest not found" });
+      }
+
+      const [progress] = await db
+        .select()
+        .from(questProgress)
+        .where(
+          and(
+            eq(questProgress.walletAddress, normalizedAddress),
+            eq(questProgress.questId, questId)
+          )
+        )
+        .limit(1);
+
+      if (!progress) {
+        return res.status(404).json({ success: false, error: "No progress found" });
+      }
+
+      if (progress.completed && progress.pointsAwarded > 0) {
+        return res.status(400).json({ success: false, error: "Quest already claimed" });
+      }
+
+      if (progress.currentValue < quest.targetValue) {
+        return res.status(400).json({ success: false, error: "Quest not completed" });
+      }
+
+      // Award points
+      const [updatedProgress] = await db
+        .update(questProgress)
+        .set({
+          completed: true,
+          completedAt: new Date(),
+          pointsAwarded: quest.points,
+          updatedAt: new Date(),
+        })
+        .where(eq(questProgress.id, progress.id))
+        .returning();
+
+      // Update user's season points
+      const profile = await getOrCreateProfile(address);
+      await db
+        .update(userProfiles)
+        .set({
+          seasonPoints: profile.seasonPoints + quest.points,
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfiles.id, profile.id));
+
+      // Update leaderboard
+      const [leaderboardEntry] = await db
+        .select()
+        .from(seasonLeaderboard)
+        .where(
+          and(
+            eq(seasonLeaderboard.seasonId, quest.seasonId),
+            eq(seasonLeaderboard.walletAddress, normalizedAddress)
+          )
+        )
+        .limit(1);
+
+      if (leaderboardEntry) {
+        await db
+          .update(seasonLeaderboard)
+          .set({
+            totalPoints: leaderboardEntry.totalPoints + quest.points,
+            questsCompleted: leaderboardEntry.questsCompleted + 1,
+            updatedAt: new Date(),
+          })
+          .where(eq(seasonLeaderboard.id, leaderboardEntry.id));
+      } else {
+        await db.insert(seasonLeaderboard).values({
+          seasonId: quest.seasonId,
+          walletAddress: normalizedAddress,
+          totalPoints: quest.points,
+          questsCompleted: 1,
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          ...updatedProgress,
+          pointsEarned: quest.points,
+        },
+      });
+    } catch (error) {
+      console.error("Error claiming quest:", error);
+      res.status(500).json({ success: false, error: "Failed to claim quest" });
+    }
+  });
+
+  // ============================================
+  // Admin/Creator Routes (for quest/season management)
+  // ============================================
+
+  /**
+   * POST /api/seasons
+   * Create a new season (admin/creator only)
+   */
+  app.post("/api/seasons", async (req, res) => {
+    try {
+      const { name, description, startTime, endTime, totalPulsePool, creatorAddress } = req.body;
+
+      if (!name || !startTime || !endTime || !creatorAddress) {
+        return res.status(400).json({ success: false, error: "Missing required fields" });
+      }
+
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+
+      if (end <= start) {
+        return res.status(400).json({ success: false, error: "End time must be after start time" });
+      }
+
+      // Check for overlapping active/pending seasons
+      const overlapping = await db
+        .select()
+        .from(seasons)
+        .where(
+          and(
+            sql`${seasons.status} IN (${SEASON_STATUS.PENDING}, ${SEASON_STATUS.ACTIVE})`,
+            sql`(${seasons.startTime} < ${end} AND ${seasons.endTime} > ${start})`
+          )
+        )
+        .limit(1);
+
+      if (overlapping.length > 0) {
+        return res.status(400).json({
+          success: false,
+          error: "Season overlaps with existing pending/active season",
+        });
+      }
+
+      // Get next season number
+      const [lastSeason] = await db
+        .select()
+        .from(seasons)
+        .orderBy(desc(seasons.seasonNumber))
+        .limit(1);
+
+      const seasonNumber = (lastSeason?.seasonNumber || 0) + 1;
+
+      const [newSeason] = await db
+        .insert(seasons)
+        .values({
+          seasonNumber,
+          name,
+          description,
+          startTime: start,
+          endTime: end,
+          totalPulsePool: totalPulsePool?.toString() || "0",
+          status: SEASON_STATUS.PENDING,
+          creatorAddress: creatorAddress.toLowerCase(),
+        })
+        .returning();
+
+      res.json({ success: true, data: newSeason });
+    } catch (error) {
+      console.error("Error creating season:", error);
+      res.status(500).json({ success: false, error: "Failed to create season" });
+    }
+  });
+
+  /**
+   * POST /api/seasons/:seasonId/start
+   * Manually start a pending season
+   */
+  app.post("/api/seasons/:seasonId/start", async (req, res) => {
+    try {
+      const { seasonId } = req.params;
+
+      const [season] = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.id, seasonId))
+        .limit(1);
+
+      if (!season) {
+        return res.status(404).json({ success: false, error: "Season not found" });
+      }
+
+      if (season.status !== SEASON_STATUS.PENDING) {
+        return res.status(400).json({ success: false, error: "Season is not pending" });
+      }
+
+      // Check no other active season
+      const [activeSeason] = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.status, SEASON_STATUS.ACTIVE))
+        .limit(1);
+
+      if (activeSeason) {
+        return res.status(400).json({
+          success: false,
+          error: "Another season is already active. End it first.",
+        });
+      }
+
+      // Update season and set start time to now if in the past
+      const now = new Date();
+      const newStartTime = new Date(season.startTime) < now ? now : season.startTime;
+
+      const [updated] = await db
+        .update(seasons)
+        .set({
+          status: SEASON_STATUS.ACTIVE,
+          startTime: newStartTime,
+          updatedAt: new Date(),
+        })
+        .where(eq(seasons.id, seasonId))
+        .returning();
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Error starting season:", error);
+      res.status(500).json({ success: false, error: "Failed to start season" });
+    }
+  });
+
+  /**
+   * POST /api/seasons/:seasonId/end
+   * Manually end an active season (triggers snapshot creation)
+   */
+  app.post("/api/seasons/:seasonId/end", async (req, res) => {
+    try {
+      const { seasonId } = req.params;
+
+      const [season] = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.id, seasonId))
+        .limit(1);
+
+      if (!season) {
+        return res.status(404).json({ success: false, error: "Season not found" });
+      }
+
+      if (season.status !== SEASON_STATUS.ACTIVE) {
+        return res.status(400).json({ success: false, error: "Season is not active" });
+      }
+
+      // End the season (creates snapshots, resets points, deactivates quests)
+      await endSeason(seasonId);
+
+      const [updated] = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.id, seasonId))
+        .limit(1);
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Error ending season:", error);
+      res.status(500).json({ success: false, error: "Failed to end season" });
+    }
+  });
+
+  /**
+   * POST /api/seasons/:seasonId/distribute
+   * Mark an ended season as distributed (after manual PULSE distribution)
+   */
+  app.post("/api/seasons/:seasonId/distribute", async (req, res) => {
+    try {
+      const { seasonId } = req.params;
+
+      const [season] = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.id, seasonId))
+        .limit(1);
+
+      if (!season) {
+        return res.status(404).json({ success: false, error: "Season not found" });
+      }
+
+      if (season.status !== SEASON_STATUS.ENDED) {
+        return res.status(400).json({ success: false, error: "Season must be ended first" });
+      }
+
+      const [updated] = await db
+        .update(seasons)
+        .set({
+          status: SEASON_STATUS.DISTRIBUTED,
+          updatedAt: new Date(),
+        })
+        .where(eq(seasons.id, seasonId))
+        .returning();
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Error marking season as distributed:", error);
+      res.status(500).json({ success: false, error: "Failed to update season" });
+    }
+  });
+
+  /**
+   * GET /api/seasons/:seasonId/snapshots
+   * Get user snapshots for an ended season
+   */
+  app.get("/api/seasons/:seasonId/snapshots", async (req, res) => {
+    try {
+      const { seasonId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const snapshots = await db
+        .select()
+        .from(userSeasonSnapshots)
+        .where(eq(userSeasonSnapshots.seasonId, seasonId))
+        .orderBy(userSeasonSnapshots.finalRank)
+        .limit(limit)
+        .offset(offset);
+
+      res.json({ success: true, data: snapshots });
+    } catch (error) {
+      console.error("Error fetching snapshots:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch snapshots" });
+    }
+  });
+
+  /**
+   * POST /api/seasons/:seasonId/copy-quests
+   * Copy quests from another season to this one
+   */
+  app.post("/api/seasons/:seasonId/copy-quests", async (req, res) => {
+    try {
+      const { seasonId } = req.params;
+      const { fromSeasonId } = req.body;
+
+      if (!fromSeasonId) {
+        return res.status(400).json({ success: false, error: "fromSeasonId is required" });
+      }
+
+      // Verify target season exists and is pending
+      const [targetSeason] = await db
+        .select()
+        .from(seasons)
+        .where(eq(seasons.id, seasonId))
+        .limit(1);
+
+      if (!targetSeason) {
+        return res.status(404).json({ success: false, error: "Target season not found" });
+      }
+
+      if (targetSeason.status !== SEASON_STATUS.PENDING) {
+        return res.status(400).json({ success: false, error: "Can only copy quests to pending seasons" });
+      }
+
+      // Get quests from source season
+      const sourceQuests = await db
+        .select()
+        .from(quests)
+        .where(eq(quests.seasonId, fromSeasonId));
+
+      if (sourceQuests.length === 0) {
+        return res.status(400).json({ success: false, error: "No quests in source season" });
+      }
+
+      // Copy quests to new season
+      const newQuests = sourceQuests.map((q) => ({
+        seasonId,
+        questType: q.questType,
+        name: q.name,
+        description: q.description,
+        points: q.points,
+        targetValue: q.targetValue,
+        targetAction: q.targetAction,
+        creatorAddress: q.creatorAddress,
+        active: true,
+        startsAt: null,
+        endsAt: null,
+        maxCompletions: q.maxCompletions,
+      }));
+
+      await db.insert(quests).values(newQuests);
+
+      res.json({ success: true, copiedCount: newQuests.length });
+    } catch (error) {
+      console.error("Error copying quests:", error);
+      res.status(500).json({ success: false, error: "Failed to copy quests" });
+    }
+  });
+
+  /**
+   * POST /api/quests
+   * Create a new quest (admin/creator only)
+   */
+  app.post("/api/quests", async (req, res) => {
+    try {
+      const {
+        seasonId,
+        questType,
+        name,
+        description,
+        points,
+        targetValue,
+        targetAction,
+        creatorAddress,
+        startsAt,
+        endsAt,
+        maxCompletions,
+      } = req.body;
+
+      if (!seasonId || questType === undefined || !name || !points || !targetValue || !targetAction || !creatorAddress) {
+        return res.status(400).json({ success: false, error: "Missing required fields" });
+      }
+
+      const [newQuest] = await db
+        .insert(quests)
+        .values({
+          seasonId,
+          questType,
+          name,
+          description,
+          points,
+          targetValue,
+          targetAction,
+          creatorAddress: creatorAddress.toLowerCase(),
+          active: true,
+          startsAt: startsAt ? new Date(startsAt) : null,
+          endsAt: endsAt ? new Date(endsAt) : null,
+          maxCompletions,
+        })
+        .returning();
+
+      res.json({ success: true, data: newQuest });
+    } catch (error) {
+      console.error("Error creating quest:", error);
+      res.status(500).json({ success: false, error: "Failed to create quest" });
+    }
+  });
+
+  /**
+   * PATCH /api/seasons/:seasonId/status
+   * Update season status (admin only)
+   */
+  app.patch("/api/seasons/:seasonId/status", async (req, res) => {
+    try {
+      const { seasonId } = req.params;
+      const { status } = req.body;
+
+      if (status === undefined) {
+        return res.status(400).json({ success: false, error: "Status is required" });
+      }
+
+      const [updated] = await db
+        .update(seasons)
+        .set({
+          status,
+          updatedAt: new Date(),
+        })
+        .where(eq(seasons.id, seasonId))
+        .returning();
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Error updating season status:", error);
+      res.status(500).json({ success: false, error: "Failed to update status" });
+    }
+  });
+
+  // ============================================
+  // Gas Sponsorship Routes
+  // ============================================
+
+  /**
+   * GET /api/sponsorship-status
+   * Check gas sponsorship availability for an address
+   */
+  app.get("/api/sponsorship-status", async (req, res) => {
+    try {
+      const { address, network } = req.query;
+
+      if (!address || typeof address !== "string") {
+        return res.status(400).json({ success: false, error: "Address is required" });
+      }
+
+      const normalizedAddress = address.toLowerCase();
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      // Count today's sponsored transactions
+      const dailyLogs = await db
+        .select()
+        .from(sponsorshipLogs)
+        .where(
+          and(
+            eq(sponsorshipLogs.walletAddress, normalizedAddress),
+            gte(sponsorshipLogs.createdAt, today)
+          )
+        );
+
+      const dailyUsed = dailyLogs.length;
+      const remaining = Math.max(0, DAILY_SPONSORSHIP_LIMIT - dailyUsed);
+
+      // Get user settings
+      const [settings] = await db
+        .select()
+        .from(userSettings)
+        .where(eq(userSettings.walletAddress, normalizedAddress))
+        .limit(1);
+
+      res.json({
+        success: true,
+        dailyUsed,
+        dailyLimit: DAILY_SPONSORSHIP_LIMIT,
+        remaining,
+        enabled: settings?.gasSponsorshipEnabled ?? true, // Default to enabled
+      });
+    } catch (error) {
+      console.error("Error checking sponsorship status:", error);
+      res.status(500).json({ success: false, error: "Failed to check status" });
+    }
+  });
+
+  /**
+   * POST /api/sponsor-transaction
+   * Gas sponsorship (not available on Aleo - users pay their own fees)
+   */
+  app.post("/api/sponsor-transaction", async (req, res) => {
+    // Gas sponsorship is not available on Aleo
+    // Users pay transaction fees directly using Aleo credits
+    res.json({
+      success: false,
+      fallbackRequired: true,
+      error: "Gas sponsorship not available on Aleo. Please use your wallet to pay transaction fees.",
+    });
+  });
+
+  /**
+   * GET /api/user/settings/:address
+   * Get user settings including gas sponsorship preference
+   */
+  app.get("/api/user/settings/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      const [settings] = await db
+        .select()
+        .from(userSettings)
+        .where(eq(userSettings.walletAddress, normalizedAddress))
+        .limit(1);
+
+      if (!settings) {
+        // Return defaults
+        return res.json({
+          success: true,
+          data: {
+            walletAddress: normalizedAddress,
+            gasSponsorshipEnabled: true, // Default to enabled
+          },
+        });
+      }
+
+      res.json({ success: true, data: settings });
+    } catch (error) {
+      console.error("Error fetching user settings:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch settings" });
+    }
+  });
+
+  /**
+   * PUT /api/user/settings/:address
+   * Update user settings
+   */
+  app.put("/api/user/settings/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const { gasSponsorshipEnabled } = req.body;
+      const normalizedAddress = address.toLowerCase();
+
+      // Upsert settings
+      const [existing] = await db
+        .select()
+        .from(userSettings)
+        .where(eq(userSettings.walletAddress, normalizedAddress))
+        .limit(1);
+
+      if (existing) {
+        const [updated] = await db
+          .update(userSettings)
+          .set({
+            gasSponsorshipEnabled: gasSponsorshipEnabled ?? existing.gasSponsorshipEnabled,
+            updatedAt: new Date(),
+          })
+          .where(eq(userSettings.id, existing.id))
+          .returning();
+
+        res.json({ success: true, data: updated });
+      } else {
+        const [created] = await db
+          .insert(userSettings)
+          .values({
+            walletAddress: normalizedAddress,
+            gasSponsorshipEnabled: gasSponsorshipEnabled ?? true,
+          })
+          .returning();
+
+        res.json({ success: true, data: created });
+      }
+    } catch (error) {
+      console.error("Error updating user settings:", error);
+      res.status(500).json({ success: false, error: "Failed to update settings" });
+    }
+  });
+
+  // ============================================
+  // Referral System Endpoints
+  // ============================================
+
+  /**
+   * Generate a short referral code from wallet address
+   */
+  function generateReferralCode(walletAddress: string): string {
+    // Use last 8 characters of the address + random suffix
+    const addressPart = walletAddress.slice(-6).toUpperCase();
+    const randomPart = Math.random().toString(36).substring(2, 5).toUpperCase();
+    return `${addressPart}${randomPart}`;
+  }
+
+  /**
+   * Calculate referral tier based on active referrals
+   */
+  function calculateReferralTier(activeReferrals: number): number {
+    if (activeReferrals >= REFERRAL_TIER_THRESHOLDS[REFERRAL_TIERS.PLATINUM]) {
+      return REFERRAL_TIERS.PLATINUM;
+    } else if (activeReferrals >= REFERRAL_TIER_THRESHOLDS[REFERRAL_TIERS.GOLD]) {
+      return REFERRAL_TIERS.GOLD;
+    } else if (activeReferrals >= REFERRAL_TIER_THRESHOLDS[REFERRAL_TIERS.SILVER]) {
+      return REFERRAL_TIERS.SILVER;
+    } else if (activeReferrals >= REFERRAL_TIER_THRESHOLDS[REFERRAL_TIERS.BRONZE]) {
+      return REFERRAL_TIERS.BRONZE;
+    }
+    return REFERRAL_TIERS.NONE;
+  }
+
+  /**
+   * Get or create referral stats for a user
+   */
+  async function getOrCreateReferralStats(walletAddress: string) {
+    const normalizedAddress = walletAddress.toLowerCase();
+
+    const [existing] = await db
+      .select()
+      .from(referralStats)
+      .where(eq(referralStats.walletAddress, normalizedAddress))
+      .limit(1);
+
+    if (existing) return existing;
+
+    const [created] = await db
+      .insert(referralStats)
+      .values({ walletAddress: normalizedAddress })
+      .returning();
+
+    return created;
+  }
+
+  /**
+   * Award referral milestone and update stats
+   */
+  async function awardReferralMilestone(
+    referralId: string,
+    referrerAddress: string,
+    refereeAddress: string,
+    milestoneType: string
+  ): Promise<{ referrerPoints: number; refereePoints: number } | null> {
+    // Check if milestone already awarded
+    const [existingMilestone] = await db
+      .select()
+      .from(referralMilestones)
+      .where(
+        and(
+          eq(referralMilestones.referralId, referralId),
+          eq(referralMilestones.milestoneType, milestoneType)
+        )
+      )
+      .limit(1);
+
+    if (existingMilestone) return null;
+
+    // Get referrer's stats to calculate tier multiplier
+    const referrerStats = await getOrCreateReferralStats(referrerAddress);
+    const tierMultiplier = REFERRAL_TIER_MULTIPLIERS[referrerStats.currentTier as keyof typeof REFERRAL_TIER_MULTIPLIERS] || 1;
+
+    // Get base rewards
+    const baseRewards = REFERRAL_REWARDS[milestoneType as keyof typeof REFERRAL_REWARDS];
+    if (!baseRewards) return null;
+
+    const referrerPoints = Math.floor(baseRewards.referrer * tierMultiplier);
+    const refereePoints = baseRewards.referee;
+
+    // Create milestone record
+    await db.insert(referralMilestones).values({
+      referralId,
+      milestoneType,
+      referrerPointsAwarded: referrerPoints,
+      refereePointsAwarded: refereePoints,
+    });
+
+    // Update referrer's stats
+    await db
+      .update(referralStats)
+      .set({
+        totalPointsEarned: sql`${referralStats.totalPointsEarned} + ${referrerPoints}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(referralStats.walletAddress, referrerAddress.toLowerCase()));
+
+    // Update referee's season points if they have a profile
+    if (refereePoints > 0) {
+      await db
+        .update(userProfiles)
+        .set({
+          seasonPoints: sql`${userProfiles.seasonPoints} + ${refereePoints}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfiles.walletAddress, refereeAddress.toLowerCase()));
+    }
+
+    // Update referrer's season points
+    if (referrerPoints > 0) {
+      await db
+        .update(userProfiles)
+        .set({
+          seasonPoints: sql`${userProfiles.seasonPoints} + ${referrerPoints}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfiles.walletAddress, referrerAddress.toLowerCase()));
+    }
+
+    return { referrerPoints, refereePoints };
+  }
+
+  /**
+   * GET /api/referral/code/:address
+   * Get or generate referral code for a wallet address
+   */
+  app.get("/api/referral/code/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      // Check for existing code
+      const [existing] = await db
+        .select()
+        .from(referralCodes)
+        .where(eq(referralCodes.walletAddress, normalizedAddress))
+        .limit(1);
+
+      if (existing) {
+        return res.json({ success: true, data: existing });
+      }
+
+      // Generate new code (with collision handling)
+      let code = generateReferralCode(address);
+      let attempts = 0;
+      while (attempts < 10) {
+        const [collision] = await db
+          .select()
+          .from(referralCodes)
+          .where(eq(referralCodes.code, code))
+          .limit(1);
+
+        if (!collision) break;
+        code = generateReferralCode(address);
+        attempts++;
+      }
+
+      // Create new referral code
+      const [created] = await db
+        .insert(referralCodes)
+        .values({
+          walletAddress: normalizedAddress,
+          code,
+        })
+        .returning();
+
+      // Ensure referral stats exist
+      await getOrCreateReferralStats(normalizedAddress);
+
+      res.json({ success: true, data: created });
+    } catch (error) {
+      console.error("Error getting/creating referral code:", error);
+      res.status(500).json({ success: false, error: "Failed to get referral code" });
+    }
+  });
+
+  /**
+   * GET /api/referral/validate/:code
+   * Validate a referral code and get referrer info
+   */
+  app.get("/api/referral/validate/:code", async (req, res) => {
+    try {
+      const { code } = req.params;
+
+      const [referralCode] = await db
+        .select()
+        .from(referralCodes)
+        .where(eq(referralCodes.code, code.toUpperCase()))
+        .limit(1);
+
+      if (!referralCode) {
+        return res.status(404).json({ success: false, error: "Invalid referral code" });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          code: referralCode.code,
+          referrerAddress: referralCode.walletAddress,
+        },
+      });
+    } catch (error) {
+      console.error("Error validating referral code:", error);
+      res.status(500).json({ success: false, error: "Failed to validate referral code" });
+    }
+  });
+
+  /**
+   * POST /api/referral/track
+   * Track a referral when a new user connects with a referral code
+   */
+  app.post("/api/referral/track", async (req, res) => {
+    try {
+      const { refereeAddress, referralCode } = req.body;
+
+      if (!refereeAddress || !referralCode) {
+        return res.status(400).json({ success: false, error: "Missing required fields" });
+      }
+
+      const normalizedRefereeAddress = refereeAddress.toLowerCase();
+
+      // Check if referee has already been referred
+      const [existingReferral] = await db
+        .select()
+        .from(referrals)
+        .where(eq(referrals.refereeAddress, normalizedRefereeAddress))
+        .limit(1);
+
+      if (existingReferral) {
+        return res.status(400).json({ success: false, error: "User has already been referred" });
+      }
+
+      // Validate referral code and get referrer
+      const [codeRecord] = await db
+        .select()
+        .from(referralCodes)
+        .where(eq(referralCodes.code, referralCode.toUpperCase()))
+        .limit(1);
+
+      if (!codeRecord) {
+        return res.status(404).json({ success: false, error: "Invalid referral code" });
+      }
+
+      const referrerAddress = codeRecord.walletAddress;
+
+      // Prevent self-referral
+      if (referrerAddress === normalizedRefereeAddress) {
+        return res.status(400).json({ success: false, error: "Cannot refer yourself" });
+      }
+
+      // Prevent circular referral
+      const [reverseReferral] = await db
+        .select()
+        .from(referrals)
+        .where(
+          and(
+            eq(referrals.referrerAddress, normalizedRefereeAddress),
+            eq(referrals.refereeAddress, referrerAddress)
+          )
+        )
+        .limit(1);
+
+      if (reverseReferral) {
+        return res.status(400).json({ success: false, error: "Circular referral not allowed" });
+      }
+
+      // Create referral record
+      const [newReferral] = await db
+        .insert(referrals)
+        .values({
+          referrerAddress,
+          refereeAddress: normalizedRefereeAddress,
+          referralCode: referralCode.toUpperCase(),
+          status: REFERRAL_STATUS.WALLET_CONNECTED,
+          activatedAt: new Date(),
+        })
+        .returning();
+
+      // Update referrer's total referrals count
+      await db
+        .update(referralStats)
+        .set({
+          totalReferrals: sql`${referralStats.totalReferrals} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(referralStats.walletAddress, referrerAddress));
+
+      // Award wallet_connect milestone
+      const milestoneResult = await awardReferralMilestone(
+        newReferral.id,
+        referrerAddress,
+        normalizedRefereeAddress,
+        REFERRAL_MILESTONES.WALLET_CONNECT
+      );
+
+      res.json({
+        success: true,
+        data: {
+          referral: newReferral,
+          milestoneAwarded: milestoneResult,
+        },
+      });
+    } catch (error) {
+      console.error("Error tracking referral:", error);
+      res.status(500).json({ success: false, error: "Failed to track referral" });
+    }
+  });
+
+  /**
+   * GET /api/referral/stats/:address
+   * Get referral statistics for a user
+   */
+  app.get("/api/referral/stats/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      const stats = await getOrCreateReferralStats(normalizedAddress);
+
+      // Get referral code
+      const [codeRecord] = await db
+        .select()
+        .from(referralCodes)
+        .where(eq(referralCodes.walletAddress, normalizedAddress))
+        .limit(1);
+
+      // Calculate next tier threshold
+      const currentTier = stats.currentTier;
+      let nextTierThreshold = null;
+      let nextTierName = null;
+
+      if (currentTier < REFERRAL_TIERS.PLATINUM) {
+        const nextTier = currentTier + 1;
+        nextTierThreshold = REFERRAL_TIER_THRESHOLDS[nextTier as keyof typeof REFERRAL_TIER_THRESHOLDS];
+        nextTierName = ["None", "Bronze", "Silver", "Gold", "Platinum"][nextTier];
+      }
+
+      res.json({
+        success: true,
+        data: {
+          ...stats,
+          referralCode: codeRecord?.code || null,
+          tierName: ["None", "Bronze", "Silver", "Gold", "Platinum"][currentTier],
+          tierMultiplier: REFERRAL_TIER_MULTIPLIERS[currentTier as keyof typeof REFERRAL_TIER_MULTIPLIERS],
+          nextTierThreshold,
+          nextTierName,
+        },
+      });
+    } catch (error) {
+      console.error("Error getting referral stats:", error);
+      res.status(500).json({ success: false, error: "Failed to get referral stats" });
+    }
+  });
+
+  /**
+   * GET /api/referral/referees/:address
+   * Get list of referees for a referrer
+   */
+  app.get("/api/referral/referees/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      const refereeList = await db
+        .select({
+          id: referrals.id,
+          refereeAddress: referrals.refereeAddress,
+          status: referrals.status,
+          createdAt: referrals.createdAt,
+          activatedAt: referrals.activatedAt,
+          completedAt: referrals.completedAt,
+        })
+        .from(referrals)
+        .where(eq(referrals.referrerAddress, normalizedAddress))
+        .orderBy(desc(referrals.createdAt));
+
+      // Get milestones for each referral
+      const refereesWithMilestones = await Promise.all(
+        refereeList.map(async (referee) => {
+          const milestones = await db
+            .select()
+            .from(referralMilestones)
+            .where(eq(referralMilestones.referralId, referee.id))
+            .orderBy(desc(referralMilestones.achievedAt));
+
+          const totalPointsFromReferee = milestones.reduce(
+            (sum, m) => sum + m.referrerPointsAwarded,
+            0
+          );
+
+          return {
+            ...referee,
+            milestones,
+            totalPointsEarned: totalPointsFromReferee,
+          };
+        })
+      );
+
+      res.json({ success: true, data: refereesWithMilestones });
+    } catch (error) {
+      console.error("Error getting referees:", error);
+      res.status(500).json({ success: false, error: "Failed to get referees" });
+    }
+  });
+
+  /**
+   * GET /api/referral/leaderboard
+   * Get referral leaderboard
+   */
+  app.get("/api/referral/leaderboard", async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const leaderboard = await db
+        .select()
+        .from(referralStats)
+        .where(gte(referralStats.totalReferrals, 1))
+        .orderBy(desc(referralStats.totalPointsEarned))
+        .limit(limit)
+        .offset(offset);
+
+      // Add rank
+      const rankedLeaderboard = leaderboard.map((entry, index) => ({
+        ...entry,
+        rank: offset + index + 1,
+        tierName: ["None", "Bronze", "Silver", "Gold", "Platinum"][entry.currentTier],
+      }));
+
+      res.json({ success: true, data: rankedLeaderboard });
+    } catch (error) {
+      console.error("Error getting referral leaderboard:", error);
+      res.status(500).json({ success: false, error: "Failed to get leaderboard" });
+    }
+  });
+
+  /**
+   * Internal function: Check and award referral milestones based on vote count
+   * Called after recording a vote
+   */
+  async function checkReferralMilestones(walletAddress: string, totalVotes: number) {
+    const normalizedAddress = walletAddress.toLowerCase();
+
+    // Find referral where this address is the referee
+    const [referral] = await db
+      .select()
+      .from(referrals)
+      .where(eq(referrals.refereeAddress, normalizedAddress))
+      .limit(1);
+
+    if (!referral) return;
+
+    const referrerAddress = referral.referrerAddress;
+
+    // Check first_vote milestone
+    if (totalVotes >= 1 && referral.status < REFERRAL_STATUS.FIRST_VOTE) {
+      await awardReferralMilestone(
+        referral.id,
+        referrerAddress,
+        normalizedAddress,
+        REFERRAL_MILESTONES.FIRST_VOTE
+      );
+
+      // Update referral status and active referrals count
+      await db
+        .update(referrals)
+        .set({
+          status: REFERRAL_STATUS.FIRST_VOTE,
+          completedAt: new Date(),
+        })
+        .where(eq(referrals.id, referral.id));
+
+      // Update referrer's active referrals and recalculate tier
+      const [updatedStats] = await db
+        .update(referralStats)
+        .set({
+          activeReferrals: sql`${referralStats.activeReferrals} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(referralStats.walletAddress, referrerAddress))
+        .returning();
+
+      if (updatedStats) {
+        const newTier = calculateReferralTier(updatedStats.activeReferrals);
+        if (newTier !== updatedStats.currentTier) {
+          await db
+            .update(referralStats)
+            .set({ currentTier: newTier, updatedAt: new Date() })
+            .where(eq(referralStats.walletAddress, referrerAddress));
+        }
+      }
+    }
+
+    // Check votes_10 milestone
+    if (totalVotes >= 10) {
+      await awardReferralMilestone(
+        referral.id,
+        referrerAddress,
+        normalizedAddress,
+        REFERRAL_MILESTONES.VOTES_10
+      );
+    }
+
+    // Check votes_50 milestone
+    if (totalVotes >= 50) {
+      await awardReferralMilestone(
+        referral.id,
+        referrerAddress,
+        normalizedAddress,
+        REFERRAL_MILESTONES.VOTES_50
+      );
+    }
+
+    // Check votes_100 milestone
+    if (totalVotes >= 100) {
+      await awardReferralMilestone(
+        referral.id,
+        referrerAddress,
+        normalizedAddress,
+        REFERRAL_MILESTONES.VOTES_100
+      );
+
+      // Mark referral as completed
+      if (referral.status < REFERRAL_STATUS.COMPLETED) {
+        await db
+          .update(referrals)
+          .set({ status: REFERRAL_STATUS.COMPLETED })
+          .where(eq(referrals.id, referral.id));
+      }
+    }
+  }
+
+  // ============================================
+  // Questionnaire System Endpoints
+  // ============================================
+
+  /**
+   * GET /api/questionnaires
+   * List questionnaires with optional filters
+   */
+  app.get("/api/questionnaires", async (req, res) => {
+    try {
+      const { status, creator, category, limit: limitParam, offset: offsetParam } = req.query;
+      const limit = parseInt(limitParam as string) || 20;
+      const offset = parseInt(offsetParam as string) || 0;
+
+      // Build conditions array
+      const conditions = [];
+      if (status !== undefined) {
+        conditions.push(eq(questionnaires.status, parseInt(status as string)));
+      }
+      if (creator) {
+        conditions.push(eq(questionnaires.creatorAddress, (creator as string).toLowerCase()));
+      }
+      if (category) {
+        conditions.push(eq(questionnaires.category, category as string));
+      }
+
+      let result;
+      if (conditions.length > 0) {
+        result = await db
+          .select()
+          .from(questionnaires)
+          .where(conditions.length === 1 ? conditions[0] : and(...conditions))
+          .orderBy(desc(questionnaires.createdAt))
+          .limit(limit)
+          .offset(offset);
+      } else {
+        result = await db
+          .select()
+          .from(questionnaires)
+          .orderBy(desc(questionnaires.createdAt))
+          .limit(limit)
+          .offset(offset);
+      }
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error("Error fetching questionnaires:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch questionnaires" });
+    }
+  });
+
+  /**
+   * GET /api/questionnaires/:id
+   * Get questionnaire details
+   */
+  app.get("/api/questionnaires/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const [questionnaire] = await db
+        .select()
+        .from(questionnaires)
+        .where(eq(questionnaires.id, id))
+        .limit(1);
+
+      if (!questionnaire) {
+        return res.status(404).json({ success: false, error: "Questionnaire not found" });
+      }
+
+      // Get polls in this questionnaire
+      const polls = await db
+        .select()
+        .from(questionnairePolls)
+        .where(eq(questionnairePolls.questionnaireId, id))
+        .orderBy(questionnairePolls.sortOrder);
+
+      res.json({
+        success: true,
+        data: {
+          ...questionnaire,
+          polls,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching questionnaire:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch questionnaire" });
+    }
+  });
+
+  /**
+   * GET /api/questionnaires/:id/polls
+   * Get polls in a questionnaire
+   */
+  app.get("/api/questionnaires/:id/polls", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const polls = await db
+        .select()
+        .from(questionnairePolls)
+        .where(eq(questionnairePolls.questionnaireId, id))
+        .orderBy(questionnairePolls.sortOrder);
+
+      res.json({ success: true, data: polls });
+    } catch (error) {
+      console.error("Error fetching questionnaire polls:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch polls" });
+    }
+  });
+
+  /**
+   * POST /api/questionnaires
+   * Create a new questionnaire
+   */
+  app.post("/api/questionnaires", async (req, res) => {
+    try {
+      const {
+        creatorAddress,
+        title,
+        description,
+        category,
+        startTime,
+        endTime,
+        rewardType,
+        totalRewardAmount,
+        coinTypeId,
+        rewardPerCompletion,
+        maxCompleters,
+        settings,
+        pollIds, // Optional: array of poll IDs to add initially
+      } = req.body;
+
+      if (!creatorAddress || !title || !startTime || !endTime) {
+        return res.status(400).json({ success: false, error: "Missing required fields" });
+      }
+
+      const normalizedCreator = creatorAddress.toLowerCase();
+
+      // Create questionnaire
+      const [newQuestionnaire] = await db
+        .insert(questionnaires)
+        .values({
+          creatorAddress: normalizedCreator,
+          title,
+          description,
+          category,
+          startTime: new Date(startTime),
+          endTime: new Date(endTime),
+          rewardType: rewardType ?? QUESTIONNAIRE_REWARD_TYPE.PER_POLL,
+          totalRewardAmount: totalRewardAmount?.toString() || "0",
+          coinTypeId: coinTypeId ?? 0,
+          rewardPerCompletion: rewardPerCompletion?.toString() || "0",
+          maxCompleters: maxCompleters || null,
+          settings: settings || {},
+          status: QUESTIONNAIRE_STATUS.DRAFT,
+          pollCount: 0,
+          completionCount: 0,
+        })
+        .returning();
+
+      // Add initial polls if provided
+      if (pollIds && Array.isArray(pollIds) && pollIds.length > 0) {
+        const pollValues = pollIds.map((pollId: number, index: number) => ({
+          questionnaireId: newQuestionnaire.id,
+          pollId,
+          sortOrder: index,
+          source: "existing",
+        }));
+
+        await db.insert(questionnairePolls).values(pollValues);
+
+        // Update poll count
+        await db
+          .update(questionnaires)
+          .set({ pollCount: pollIds.length, updatedAt: new Date() })
+          .where(eq(questionnaires.id, newQuestionnaire.id));
+
+        newQuestionnaire.pollCount = pollIds.length;
+      }
+
+      res.json({ success: true, data: newQuestionnaire });
+    } catch (error) {
+      console.error("Error creating questionnaire:", error);
+      res.status(500).json({ success: false, error: "Failed to create questionnaire" });
+    }
+  });
+
+  /**
+   * PUT /api/questionnaires/:id
+   * Update a questionnaire
+   */
+  app.put("/api/questionnaires/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const {
+        title,
+        description,
+        category,
+        startTime,
+        endTime,
+        rewardType,
+        totalRewardAmount,
+        coinTypeId,
+        rewardPerCompletion,
+        maxCompleters,
+        settings,
+        status,
+        onChainId,
+      } = req.body;
+
+      // Build update object
+      const updateData: Partial<typeof questionnaires.$inferInsert> = {
+        updatedAt: new Date(),
+      };
+
+      if (title !== undefined) updateData.title = title;
+      if (description !== undefined) updateData.description = description;
+      if (category !== undefined) updateData.category = category;
+      if (startTime !== undefined) updateData.startTime = new Date(startTime);
+      if (endTime !== undefined) updateData.endTime = new Date(endTime);
+      if (rewardType !== undefined) updateData.rewardType = rewardType;
+      if (totalRewardAmount !== undefined) updateData.totalRewardAmount = totalRewardAmount.toString();
+      if (coinTypeId !== undefined) updateData.coinTypeId = coinTypeId;
+      if (rewardPerCompletion !== undefined) updateData.rewardPerCompletion = rewardPerCompletion.toString();
+      if (maxCompleters !== undefined) updateData.maxCompleters = maxCompleters;
+      if (settings !== undefined) updateData.settings = settings;
+      if (status !== undefined) updateData.status = status;
+      if (onChainId !== undefined) updateData.onChainId = onChainId;
+
+      const [updated] = await db
+        .update(questionnaires)
+        .set(updateData)
+        .where(eq(questionnaires.id, id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ success: false, error: "Questionnaire not found" });
+      }
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Error updating questionnaire:", error);
+      res.status(500).json({ success: false, error: "Failed to update questionnaire" });
+    }
+  });
+
+  /**
+   * DELETE /api/questionnaires/:id
+   * Archive a questionnaire (soft delete)
+   */
+  app.delete("/api/questionnaires/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const [archived] = await db
+        .update(questionnaires)
+        .set({
+          status: QUESTIONNAIRE_STATUS.ARCHIVED,
+          updatedAt: new Date(),
+        })
+        .where(eq(questionnaires.id, id))
+        .returning();
+
+      if (!archived) {
+        return res.status(404).json({ success: false, error: "Questionnaire not found" });
+      }
+
+      res.json({ success: true, data: archived });
+    } catch (error) {
+      console.error("Error archiving questionnaire:", error);
+      res.status(500).json({ success: false, error: "Failed to archive questionnaire" });
+    }
+  });
+
+  /**
+   * POST /api/questionnaires/:id/polls
+   * Add a poll to a questionnaire
+   */
+  app.post("/api/questionnaires/:id/polls", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { pollId, source, rewardPercentage } = req.body;
+
+      if (pollId === undefined) {
+        return res.status(400).json({ success: false, error: "pollId is required" });
+      }
+
+      // Get current max sort order
+      const [maxSort] = await db
+        .select({ maxOrder: sql<number>`COALESCE(MAX(${questionnairePolls.sortOrder}), -1)` })
+        .from(questionnairePolls)
+        .where(eq(questionnairePolls.questionnaireId, id));
+
+      const nextOrder = (maxSort?.maxOrder ?? -1) + 1;
+
+      // Add poll
+      const [newPoll] = await db
+        .insert(questionnairePolls)
+        .values({
+          questionnaireId: id,
+          pollId,
+          sortOrder: nextOrder,
+          source: source || "existing",
+          rewardPercentage,
+        })
+        .returning();
+
+      // Update poll count
+      await db
+        .update(questionnaires)
+        .set({
+          pollCount: sql`${questionnaires.pollCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(questionnaires.id, id));
+
+      res.json({ success: true, data: newPoll });
+    } catch (error) {
+      console.error("Error adding poll to questionnaire:", error);
+      res.status(500).json({ success: false, error: "Failed to add poll" });
+    }
+  });
+
+  /**
+   * DELETE /api/questionnaires/:id/polls/:pollId
+   * Remove a poll from a questionnaire
+   */
+  app.delete("/api/questionnaires/:id/polls/:pollId", async (req, res) => {
+    try {
+      const { id, pollId } = req.params;
+
+      const [deleted] = await db
+        .delete(questionnairePolls)
+        .where(
+          and(
+            eq(questionnairePolls.questionnaireId, id),
+            eq(questionnairePolls.pollId, parseInt(pollId))
+          )
+        )
+        .returning();
+
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: "Poll not found in questionnaire" });
+      }
+
+      // Update poll count
+      await db
+        .update(questionnaires)
+        .set({
+          pollCount: sql`GREATEST(${questionnaires.pollCount} - 1, 0)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(questionnaires.id, id));
+
+      res.json({ success: true, data: deleted });
+    } catch (error) {
+      console.error("Error removing poll from questionnaire:", error);
+      res.status(500).json({ success: false, error: "Failed to remove poll" });
+    }
+  });
+
+  /**
+   * PUT /api/questionnaires/:id/polls/order
+   * Reorder polls in a questionnaire
+   */
+  app.put("/api/questionnaires/:id/polls/order", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { pollOrder } = req.body; // Array of { pollId, sortOrder }
+
+      if (!Array.isArray(pollOrder)) {
+        return res.status(400).json({ success: false, error: "pollOrder must be an array" });
+      }
+
+      // Update each poll's sort order
+      for (const { pollId, sortOrder } of pollOrder) {
+        await db
+          .update(questionnairePolls)
+          .set({ sortOrder })
+          .where(
+            and(
+              eq(questionnairePolls.questionnaireId, id),
+              eq(questionnairePolls.pollId, pollId)
+            )
+          );
+      }
+
+      // Fetch updated polls
+      const polls = await db
+        .select()
+        .from(questionnairePolls)
+        .where(eq(questionnairePolls.questionnaireId, id))
+        .orderBy(questionnairePolls.sortOrder);
+
+      res.json({ success: true, data: polls });
+    } catch (error) {
+      console.error("Error reordering polls:", error);
+      res.status(500).json({ success: false, error: "Failed to reorder polls" });
+    }
+  });
+
+  /**
+   * GET /api/questionnaires/:id/progress/:address
+   * Get user's progress on a questionnaire
+   */
+  app.get("/api/questionnaires/:id/progress/:address", async (req, res) => {
+    try {
+      const { id, address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      const [progress] = await db
+        .select()
+        .from(questionnaireProgress)
+        .where(
+          and(
+            eq(questionnaireProgress.questionnaireId, id),
+            eq(questionnaireProgress.walletAddress, normalizedAddress)
+          )
+        )
+        .limit(1);
+
+      if (!progress) {
+        // Return empty progress
+        return res.json({
+          success: true,
+          data: {
+            questionnaireId: id,
+            walletAddress: normalizedAddress,
+            started: false,
+            pollsAnswered: [],
+            isComplete: false,
+            claimed: false,
+          },
+        });
+      }
+
+      res.json({ success: true, data: progress });
+    } catch (error) {
+      console.error("Error fetching questionnaire progress:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch progress" });
+    }
+  });
+
+  /**
+   * POST /api/questionnaires/:id/start/:address
+   * Start a questionnaire for a user
+   */
+  app.post("/api/questionnaires/:id/start/:address", async (req, res) => {
+    try {
+      const { id, address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      // Check if already started
+      const [existing] = await db
+        .select()
+        .from(questionnaireProgress)
+        .where(
+          and(
+            eq(questionnaireProgress.questionnaireId, id),
+            eq(questionnaireProgress.walletAddress, normalizedAddress)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        return res.json({ success: true, data: existing });
+      }
+
+      // Create progress record
+      const [progress] = await db
+        .insert(questionnaireProgress)
+        .values({
+          questionnaireId: id,
+          walletAddress: normalizedAddress,
+          started: true,
+          startedAt: new Date(),
+          pollsAnswered: [],
+          isComplete: false,
+          claimed: false,
+        })
+        .returning();
+
+      res.json({ success: true, data: progress });
+    } catch (error) {
+      console.error("Error starting questionnaire:", error);
+      res.status(500).json({ success: false, error: "Failed to start questionnaire" });
+    }
+  });
+
+  /**
+   * PUT /api/questionnaires/:id/progress/:address
+   * Update user's progress on a questionnaire
+   */
+  app.put("/api/questionnaires/:id/progress/:address", async (req, res) => {
+    try {
+      const { id, address } = req.params;
+      const { pollsAnswered, isComplete, bulkVoteTxHash, claimed, claimTxHash } = req.body;
+      const normalizedAddress = address.toLowerCase();
+
+      // Build update object
+      const updateData: Partial<typeof questionnaireProgress.$inferInsert> = {
+        updatedAt: new Date(),
+      };
+
+      if (pollsAnswered !== undefined) updateData.pollsAnswered = pollsAnswered;
+      if (isComplete !== undefined) {
+        updateData.isComplete = isComplete;
+        if (isComplete) {
+          updateData.completedAt = new Date();
+        }
+      }
+      if (bulkVoteTxHash !== undefined) updateData.bulkVoteTxHash = bulkVoteTxHash;
+      if (claimed !== undefined) {
+        updateData.claimed = claimed;
+        if (claimed) {
+          updateData.claimedAt = new Date();
+        }
+      }
+      if (claimTxHash !== undefined) updateData.claimTxHash = claimTxHash;
+
+      // Check if progress exists
+      const [existing] = await db
+        .select()
+        .from(questionnaireProgress)
+        .where(
+          and(
+            eq(questionnaireProgress.questionnaireId, id),
+            eq(questionnaireProgress.walletAddress, normalizedAddress)
+          )
+        )
+        .limit(1);
+
+      let result;
+      if (existing) {
+        [result] = await db
+          .update(questionnaireProgress)
+          .set(updateData)
+          .where(eq(questionnaireProgress.id, existing.id))
+          .returning();
+      } else {
+        // Create new progress record
+        [result] = await db
+          .insert(questionnaireProgress)
+          .values({
+            questionnaireId: id,
+            walletAddress: normalizedAddress,
+            started: true,
+            startedAt: new Date(),
+            ...updateData,
+          })
+          .returning();
+      }
+
+      // If marked as complete, update questionnaire completion count
+      if (isComplete && !existing?.isComplete) {
+        await db
+          .update(questionnaires)
+          .set({
+            completionCount: sql`${questionnaires.completionCount} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(eq(questionnaires.id, id));
+      }
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error("Error updating questionnaire progress:", error);
+      res.status(500).json({ success: false, error: "Failed to update progress" });
+    }
+  });
+
+  /**
+   * POST /api/questionnaires/:id/bulk-vote
+   * Record a bulk vote for a questionnaire (called after successful on-chain bulk_vote)
+   */
+  app.post("/api/questionnaires/:id/bulk-vote", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { walletAddress, pollIds, optionIndices, txHash } = req.body;
+
+      if (!walletAddress || !pollIds || !optionIndices || !txHash) {
+        return res.status(400).json({ success: false, error: "Missing required fields" });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+
+      // Build pollsAnswered array
+      const pollsAnswered = pollIds.map((pollId: number, index: number) => ({
+        pollId,
+        optionIndex: optionIndices[index],
+        answeredAt: new Date().toISOString(),
+      }));
+
+      // Get or create progress record
+      const [existing] = await db
+        .select()
+        .from(questionnaireProgress)
+        .where(
+          and(
+            eq(questionnaireProgress.questionnaireId, id),
+            eq(questionnaireProgress.walletAddress, normalizedAddress)
+          )
+        )
+        .limit(1);
+
+      let result;
+      if (existing) {
+        [result] = await db
+          .update(questionnaireProgress)
+          .set({
+            pollsAnswered,
+            isComplete: true,
+            completedAt: new Date(),
+            bulkVoteTxHash: txHash,
+            updatedAt: new Date(),
+          })
+          .where(eq(questionnaireProgress.id, existing.id))
+          .returning();
+      } else {
+        [result] = await db
+          .insert(questionnaireProgress)
+          .values({
+            questionnaireId: id,
+            walletAddress: normalizedAddress,
+            started: true,
+            startedAt: new Date(),
+            pollsAnswered,
+            isComplete: true,
+            completedAt: new Date(),
+            bulkVoteTxHash: txHash,
+            claimed: false,
+          })
+          .returning();
+      }
+
+      // Update questionnaire completion count if newly completed
+      if (!existing?.isComplete) {
+        await db
+          .update(questionnaires)
+          .set({
+            completionCount: sql`${questionnaires.completionCount} + 1`,
+            updatedAt: new Date(),
+          })
+          .where(eq(questionnaires.id, id));
+      }
+
+      // Record votes for each poll in dailyVoteLogs
+      const today = getTodayString();
+      const profile = await getOrCreateProfile(normalizedAddress);
+
+      // Update user's vote count
+      const votesToday = profile.lastVoteResetDate === today
+        ? profile.votesToday + pollIds.length
+        : pollIds.length;
+
+      await db
+        .update(userProfiles)
+        .set({
+          votesToday,
+          lastVoteDate: today,
+          lastVoteResetDate: today,
+          seasonVotes: profile.seasonVotes + pollIds.length,
+          updatedAt: new Date(),
+        })
+        .where(eq(userProfiles.id, profile.id));
+
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error("Error recording bulk vote:", error);
+      res.status(500).json({ success: false, error: "Failed to record bulk vote" });
+    }
+  });
+
+  /**
+   * GET /api/questionnaires/active
+   * Get active questionnaires (for browse page)
+   */
+  app.get("/api/questionnaires/active", async (req, res) => {
+    try {
+      const now = new Date();
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = parseInt(req.query.offset as string) || 0;
+
+      const activeQuestionnaires = await db
+        .select()
+        .from(questionnaires)
+        .where(
+          and(
+            eq(questionnaires.status, QUESTIONNAIRE_STATUS.ACTIVE),
+            gte(questionnaires.endTime, now)
+          )
+        )
+        .orderBy(desc(questionnaires.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      res.json({ success: true, data: activeQuestionnaires });
+    } catch (error) {
+      console.error("Error fetching active questionnaires:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch questionnaires" });
+    }
+  });
+
+  /**
+   * GET /api/questionnaires/creator/:address
+   * Get questionnaires created by a specific address
+   */
+  app.get("/api/questionnaires/creator/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      const creatorQuestionnaires = await db
+        .select()
+        .from(questionnaires)
+        .where(eq(questionnaires.creatorAddress, normalizedAddress))
+        .orderBy(desc(questionnaires.createdAt));
+
+      res.json({ success: true, data: creatorQuestionnaires });
+    } catch (error) {
+      console.error("Error fetching creator questionnaires:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch questionnaires" });
+    }
+  });
+
+  // ============================================
+  // Projects System Endpoints
+  // ============================================
+
+  /**
+   * Helper: Check if user has access to a project with required role
+   */
+  async function checkProjectAccess(
+    projectId: string,
+    walletAddress: string,
+    requiredRole: number
+  ): Promise<{ hasAccess: boolean; userRole: number | null; project: Project | null }> {
+    const normalizedAddress = walletAddress.toLowerCase();
+
+    // Get project
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+
+    if (!project) {
+      return { hasAccess: false, userRole: null, project: null };
+    }
+
+    // Check if owner
+    if (project.ownerAddress === normalizedAddress) {
+      return { hasAccess: true, userRole: PROJECT_ROLE.OWNER, project };
+    }
+
+    // Check collaborator role
+    const [collab] = await db
+      .select()
+      .from(projectCollaborators)
+      .where(
+        and(
+          eq(projectCollaborators.projectId, projectId),
+          eq(projectCollaborators.walletAddress, normalizedAddress)
+        )
+      )
+      .limit(1);
+
+    if (!collab || collab.acceptedAt === null) {
+      return { hasAccess: false, userRole: null, project };
+    }
+
+    // Check if role meets requirement (lower number = higher permission)
+    if (collab.role > requiredRole) {
+      return { hasAccess: false, userRole: collab.role, project };
+    }
+
+    return { hasAccess: true, userRole: collab.role, project };
+  }
+
+  /**
+   * GET /api/projects
+   * List projects for a user (owned or collaborating)
+   */
+  app.get("/api/projects", async (req, res) => {
+    try {
+      const { owner, status, limit: limitParam, offset: offsetParam } = req.query;
+      const limit = parseInt(limitParam as string) || 20;
+      const offset = parseInt(offsetParam as string) || 0;
+
+      if (!owner) {
+        return res.status(400).json({ success: false, error: "owner parameter is required" });
+      }
+
+      const normalizedOwner = (owner as string).toLowerCase();
+
+      // Get projects owned by user
+      const ownedProjects = await db
+        .select()
+        .from(projects)
+        .where(
+          status !== undefined
+            ? and(
+                eq(projects.ownerAddress, normalizedOwner),
+                eq(projects.status, parseInt(status as string))
+              )
+            : eq(projects.ownerAddress, normalizedOwner)
+        )
+        .orderBy(desc(projects.updatedAt))
+        .limit(limit)
+        .offset(offset);
+
+      // Get projects where user is collaborator
+      const collaborations = await db
+        .select({
+          project: projects,
+          role: projectCollaborators.role,
+        })
+        .from(projectCollaborators)
+        .innerJoin(projects, eq(projects.id, projectCollaborators.projectId))
+        .where(
+          and(
+            eq(projectCollaborators.walletAddress, normalizedOwner),
+            sql`${projectCollaborators.acceptedAt} IS NOT NULL`
+          )
+        )
+        .orderBy(desc(projects.updatedAt))
+        .limit(limit);
+
+      // Combine and deduplicate
+      const allProjects = [
+        ...ownedProjects.map((p) => ({ ...p, userRole: PROJECT_ROLE.OWNER })),
+        ...collaborations.map((c) => ({ ...c.project, userRole: c.role })),
+      ];
+
+      res.json({ success: true, data: allProjects });
+    } catch (error) {
+      console.error("Error fetching projects:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch projects" });
+    }
+  });
+
+  /**
+   * GET /api/projects/:id
+   * Get project details with polls and questionnaires
+   */
+  app.get("/api/projects/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { address } = req.query;
+
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, id))
+        .limit(1);
+
+      if (!project) {
+        return res.status(404).json({ success: false, error: "Project not found" });
+      }
+
+      // Get polls in project
+      const polls = await db
+        .select()
+        .from(projectPolls)
+        .where(eq(projectPolls.projectId, id))
+        .orderBy(desc(projectPolls.addedAt));
+
+      // Get questionnaires in project
+      const questionnaireLinks = await db
+        .select()
+        .from(projectQuestionnaires)
+        .where(eq(projectQuestionnaires.projectId, id));
+
+      // Fetch full questionnaire data
+      const questionnaireIds = questionnaireLinks.map((q) => q.questionnaireId);
+      let questionnaireList: Questionnaire[] = [];
+      if (questionnaireIds.length > 0) {
+        questionnaireList = await db
+          .select()
+          .from(questionnaires)
+          .where(sql`${questionnaires.id} IN (${sql.join(questionnaireIds.map(id => sql`${id}`), sql`, `)})`);
+      }
+
+      // Get collaborators
+      const collaborators = await db
+        .select()
+        .from(projectCollaborators)
+        .where(eq(projectCollaborators.projectId, id));
+
+      // Check user role if address provided
+      let userRole = null;
+      if (address) {
+        const normalizedAddress = (address as string).toLowerCase();
+        if (project.ownerAddress === normalizedAddress) {
+          userRole = PROJECT_ROLE.OWNER;
+        } else {
+          const collab = collaborators.find((c) => c.walletAddress === normalizedAddress);
+          userRole = collab?.role ?? null;
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          ...project,
+          polls,
+          questionnaires: questionnaireList,
+          collaborators,
+          userRole,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching project:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch project" });
+    }
+  });
+
+  /**
+   * POST /api/projects
+   * Create a new project
+   */
+  app.post("/api/projects", async (req, res) => {
+    try {
+      const { name, description, color, icon, ownerAddress } = req.body;
+
+      if (!name || !ownerAddress) {
+        return res.status(400).json({ success: false, error: "name and ownerAddress are required" });
+      }
+
+      const normalizedOwner = ownerAddress.toLowerCase();
+
+      const [newProject] = await db
+        .insert(projects)
+        .values({
+          name,
+          description,
+          color: color || "#6366f1",
+          icon,
+          ownerAddress: normalizedOwner,
+          status: PROJECT_STATUS.ACTIVE,
+        })
+        .returning();
+
+      res.json({ success: true, data: newProject });
+    } catch (error) {
+      console.error("Error creating project:", error);
+      res.status(500).json({ success: false, error: "Failed to create project" });
+    }
+  });
+
+  /**
+   * PUT /api/projects/:id
+   * Update a project
+   */
+  app.put("/api/projects/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, description, color, icon, address } = req.body;
+
+      if (!address) {
+        return res.status(400).json({ success: false, error: "address is required" });
+      }
+
+      // Check access (need at least Admin role)
+      const access = await checkProjectAccess(id, address, PROJECT_ROLE.ADMIN);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      const updateData: Partial<typeof projects.$inferInsert> = {
+        updatedAt: new Date(),
+      };
+
+      if (name !== undefined) updateData.name = name;
+      if (description !== undefined) updateData.description = description;
+      if (color !== undefined) updateData.color = color;
+      if (icon !== undefined) updateData.icon = icon;
+
+      const [updated] = await db
+        .update(projects)
+        .set(updateData)
+        .where(eq(projects.id, id))
+        .returning();
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Error updating project:", error);
+      res.status(500).json({ success: false, error: "Failed to update project" });
+    }
+  });
+
+  /**
+   * DELETE /api/projects/:id
+   * Archive a project (soft delete)
+   */
+  app.delete("/api/projects/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { address } = req.body;
+
+      if (!address) {
+        return res.status(400).json({ success: false, error: "address is required" });
+      }
+
+      // Check access (only Owner can delete)
+      const access = await checkProjectAccess(id, address, PROJECT_ROLE.OWNER);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Only owner can delete project" });
+      }
+
+      const [archived] = await db
+        .update(projects)
+        .set({
+          status: PROJECT_STATUS.ARCHIVED,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id))
+        .returning();
+
+      res.json({ success: true, data: archived });
+    } catch (error) {
+      console.error("Error archiving project:", error);
+      res.status(500).json({ success: false, error: "Failed to archive project" });
+    }
+  });
+
+  // ============================================
+  // Project Content Management
+  // ============================================
+
+  /**
+   * POST /api/projects/:id/polls
+   * Add poll(s) to a project
+   */
+  app.post("/api/projects/:id/polls", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { pollIds, address, cachedTitles } = req.body;
+
+      if (!address || !pollIds || !Array.isArray(pollIds)) {
+        return res.status(400).json({ success: false, error: "address and pollIds array are required" });
+      }
+
+      // Check access (need at least Editor role)
+      const access = await checkProjectAccess(id, address, PROJECT_ROLE.EDITOR);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      const normalizedAddress = address.toLowerCase();
+
+      // Check for duplicates
+      const existingPolls = await db
+        .select()
+        .from(projectPolls)
+        .where(eq(projectPolls.projectId, id));
+
+      const existingPollIds = new Set(existingPolls.map((p) => p.pollId));
+      const newPollIds = pollIds.filter((pid: number) => !existingPollIds.has(pid));
+
+      if (newPollIds.length === 0) {
+        return res.json({ success: true, data: [], message: "All polls already in project" });
+      }
+
+      // Add polls
+      const pollValues = newPollIds.map((pollId: number, index: number) => ({
+        projectId: id,
+        pollId,
+        addedBy: normalizedAddress,
+        cachedTitle: cachedTitles?.[index] || null,
+        lastSynced: new Date(),
+      }));
+
+      const inserted = await db.insert(projectPolls).values(pollValues).returning();
+
+      // Update cached count
+      await db
+        .update(projects)
+        .set({
+          cachedTotalPolls: sql`${projects.cachedTotalPolls} + ${inserted.length}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id));
+
+      res.json({ success: true, data: inserted });
+    } catch (error) {
+      console.error("Error adding polls to project:", error);
+      res.status(500).json({ success: false, error: "Failed to add polls" });
+    }
+  });
+
+  /**
+   * DELETE /api/projects/:id/polls/:pollId
+   * Remove a poll from a project
+   */
+  app.delete("/api/projects/:id/polls/:pollId", async (req, res) => {
+    try {
+      const { id, pollId } = req.params;
+      const { address } = req.body;
+
+      if (!address) {
+        return res.status(400).json({ success: false, error: "address is required" });
+      }
+
+      // Check access
+      const access = await checkProjectAccess(id, address, PROJECT_ROLE.EDITOR);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      const [deleted] = await db
+        .delete(projectPolls)
+        .where(
+          and(
+            eq(projectPolls.projectId, id),
+            eq(projectPolls.pollId, parseInt(pollId))
+          )
+        )
+        .returning();
+
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: "Poll not found in project" });
+      }
+
+      // Update cached count
+      await db
+        .update(projects)
+        .set({
+          cachedTotalPolls: sql`GREATEST(${projects.cachedTotalPolls} - 1, 0)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id));
+
+      res.json({ success: true, data: deleted });
+    } catch (error) {
+      console.error("Error removing poll from project:", error);
+      res.status(500).json({ success: false, error: "Failed to remove poll" });
+    }
+  });
+
+  /**
+   * POST /api/projects/:id/questionnaires
+   * Add questionnaire(s) to a project
+   */
+  app.post("/api/projects/:id/questionnaires", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { questionnaireIds, address } = req.body;
+
+      if (!address || !questionnaireIds || !Array.isArray(questionnaireIds)) {
+        return res.status(400).json({ success: false, error: "address and questionnaireIds array are required" });
+      }
+
+      // Check access
+      const access = await checkProjectAccess(id, address, PROJECT_ROLE.EDITOR);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      const normalizedAddress = address.toLowerCase();
+
+      // Check for duplicates
+      const existing = await db
+        .select()
+        .from(projectQuestionnaires)
+        .where(eq(projectQuestionnaires.projectId, id));
+
+      const existingIds = new Set(existing.map((q) => q.questionnaireId));
+      const newIds = questionnaireIds.filter((qid: string) => !existingIds.has(qid));
+
+      if (newIds.length === 0) {
+        return res.json({ success: true, data: [], message: "All questionnaires already in project" });
+      }
+
+      // Add questionnaires
+      const values = newIds.map((questionnaireId: string) => ({
+        projectId: id,
+        questionnaireId,
+        addedBy: normalizedAddress,
+      }));
+
+      const inserted = await db.insert(projectQuestionnaires).values(values).returning();
+
+      // Update cached count
+      await db
+        .update(projects)
+        .set({
+          cachedTotalQuestionnaires: sql`${projects.cachedTotalQuestionnaires} + ${inserted.length}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id));
+
+      res.json({ success: true, data: inserted });
+    } catch (error) {
+      console.error("Error adding questionnaires to project:", error);
+      res.status(500).json({ success: false, error: "Failed to add questionnaires" });
+    }
+  });
+
+  /**
+   * DELETE /api/projects/:id/questionnaires/:questionnaireId
+   * Remove a questionnaire from a project
+   */
+  app.delete("/api/projects/:id/questionnaires/:questionnaireId", async (req, res) => {
+    try {
+      const { id, questionnaireId } = req.params;
+      const { address } = req.body;
+
+      if (!address) {
+        return res.status(400).json({ success: false, error: "address is required" });
+      }
+
+      // Check access
+      const access = await checkProjectAccess(id, address, PROJECT_ROLE.EDITOR);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      const [deleted] = await db
+        .delete(projectQuestionnaires)
+        .where(
+          and(
+            eq(projectQuestionnaires.projectId, id),
+            eq(projectQuestionnaires.questionnaireId, questionnaireId)
+          )
+        )
+        .returning();
+
+      if (!deleted) {
+        return res.status(404).json({ success: false, error: "Questionnaire not found in project" });
+      }
+
+      // Update cached count
+      await db
+        .update(projects)
+        .set({
+          cachedTotalQuestionnaires: sql`GREATEST(${projects.cachedTotalQuestionnaires} - 1, 0)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, id));
+
+      res.json({ success: true, data: deleted });
+    } catch (error) {
+      console.error("Error removing questionnaire from project:", error);
+      res.status(500).json({ success: false, error: "Failed to remove questionnaire" });
+    }
+  });
+
+  // ============================================
+  // Project Collaborators
+  // ============================================
+
+  /**
+   * GET /api/projects/:id/collaborators
+   * List collaborators for a project
+   */
+  app.get("/api/projects/:id/collaborators", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const collaborators = await db
+        .select()
+        .from(projectCollaborators)
+        .where(eq(projectCollaborators.projectId, id))
+        .orderBy(projectCollaborators.role);
+
+      // Get project to include owner
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, id))
+        .limit(1);
+
+      res.json({
+        success: true,
+        data: {
+          owner: project?.ownerAddress,
+          collaborators,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching collaborators:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch collaborators" });
+    }
+  });
+
+  /**
+   * POST /api/projects/:id/collaborators
+   * Invite a collaborator to a project
+   */
+  app.post("/api/projects/:id/collaborators", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { walletAddress, role, inviterAddress } = req.body;
+
+      if (!walletAddress || role === undefined || !inviterAddress) {
+        return res.status(400).json({ success: false, error: "walletAddress, role, and inviterAddress are required" });
+      }
+
+      // Check access (Admins can invite editors/viewers, Owner can invite anyone)
+      const access = await checkProjectAccess(id, inviterAddress, PROJECT_ROLE.ADMIN);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      // Admins can't invite other admins
+      if (access.userRole === PROJECT_ROLE.ADMIN && role <= PROJECT_ROLE.ADMIN) {
+        return res.status(403).json({ success: false, error: "Admins cannot invite other admins" });
+      }
+
+      const normalizedInvitee = walletAddress.toLowerCase();
+      const normalizedInviter = inviterAddress.toLowerCase();
+
+      // Check if already a collaborator
+      const [existing] = await db
+        .select()
+        .from(projectCollaborators)
+        .where(
+          and(
+            eq(projectCollaborators.projectId, id),
+            eq(projectCollaborators.walletAddress, normalizedInvitee)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        return res.status(400).json({ success: false, error: "User is already a collaborator" });
+      }
+
+      // Check if inviting the owner
+      if (access.project?.ownerAddress === normalizedInvitee) {
+        return res.status(400).json({ success: false, error: "Cannot invite the project owner" });
+      }
+
+      // Create collaborator invite (acceptedAt is null until accepted)
+      const [collab] = await db
+        .insert(projectCollaborators)
+        .values({
+          projectId: id,
+          walletAddress: normalizedInvitee,
+          role,
+          invitedBy: normalizedInviter,
+          acceptedAt: null, // Will be set when user accepts
+        })
+        .returning();
+
+      res.json({ success: true, data: collab });
+    } catch (error) {
+      console.error("Error inviting collaborator:", error);
+      res.status(500).json({ success: false, error: "Failed to invite collaborator" });
+    }
+  });
+
+  /**
+   * POST /api/projects/:id/collaborators/accept
+   * Accept a pending invite
+   */
+  app.post("/api/projects/:id/collaborators/accept", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { walletAddress } = req.body;
+
+      if (!walletAddress) {
+        return res.status(400).json({ success: false, error: "walletAddress is required" });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+
+      const [updated] = await db
+        .update(projectCollaborators)
+        .set({ acceptedAt: new Date() })
+        .where(
+          and(
+            eq(projectCollaborators.projectId, id),
+            eq(projectCollaborators.walletAddress, normalizedAddress),
+            sql`${projectCollaborators.acceptedAt} IS NULL`
+          )
+        )
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ success: false, error: "No pending invite found" });
+      }
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Error accepting invite:", error);
+      res.status(500).json({ success: false, error: "Failed to accept invite" });
+    }
+  });
+
+  /**
+   * PUT /api/projects/:id/collaborators/:address
+   * Update collaborator role
+   */
+  app.put("/api/projects/:id/collaborators/:collabAddress", async (req, res) => {
+    try {
+      const { id, collabAddress } = req.params;
+      const { role, updaterAddress } = req.body;
+
+      if (role === undefined || !updaterAddress) {
+        return res.status(400).json({ success: false, error: "role and updaterAddress are required" });
+      }
+
+      // Check access
+      const access = await checkProjectAccess(id, updaterAddress, PROJECT_ROLE.ADMIN);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      // Admins can only change editors/viewers
+      if (access.userRole === PROJECT_ROLE.ADMIN && role <= PROJECT_ROLE.ADMIN) {
+        return res.status(403).json({ success: false, error: "Admins cannot promote to admin" });
+      }
+
+      const normalizedCollab = collabAddress.toLowerCase();
+
+      const [updated] = await db
+        .update(projectCollaborators)
+        .set({ role })
+        .where(
+          and(
+            eq(projectCollaborators.projectId, id),
+            eq(projectCollaborators.walletAddress, normalizedCollab)
+          )
+        )
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ success: false, error: "Collaborator not found" });
+      }
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Error updating collaborator:", error);
+      res.status(500).json({ success: false, error: "Failed to update collaborator" });
+    }
+  });
+
+  /**
+   * DELETE /api/projects/:id/collaborators/:address
+   * Remove a collaborator from a project
+   */
+  app.delete("/api/projects/:id/collaborators/:collabAddress", async (req, res) => {
+    try {
+      const { id, collabAddress } = req.params;
+      const { removerAddress } = req.body;
+
+      if (!removerAddress) {
+        return res.status(400).json({ success: false, error: "removerAddress is required" });
+      }
+
+      const normalizedCollab = collabAddress.toLowerCase();
+      const normalizedRemover = removerAddress.toLowerCase();
+
+      // Allow users to remove themselves
+      if (normalizedCollab === normalizedRemover) {
+        const [deleted] = await db
+          .delete(projectCollaborators)
+          .where(
+            and(
+              eq(projectCollaborators.projectId, id),
+              eq(projectCollaborators.walletAddress, normalizedCollab)
+            )
+          )
+          .returning();
+
+        return res.json({ success: true, data: deleted });
+      }
+
+      // Check access for removing others
+      const access = await checkProjectAccess(id, removerAddress, PROJECT_ROLE.ADMIN);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      // Get the collaborator being removed
+      const [targetCollab] = await db
+        .select()
+        .from(projectCollaborators)
+        .where(
+          and(
+            eq(projectCollaborators.projectId, id),
+            eq(projectCollaborators.walletAddress, normalizedCollab)
+          )
+        )
+        .limit(1);
+
+      if (!targetCollab) {
+        return res.status(404).json({ success: false, error: "Collaborator not found" });
+      }
+
+      // Admins can only remove editors/viewers
+      if (access.userRole === PROJECT_ROLE.ADMIN && targetCollab.role <= PROJECT_ROLE.ADMIN) {
+        return res.status(403).json({ success: false, error: "Admins cannot remove other admins" });
+      }
+
+      const [deleted] = await db
+        .delete(projectCollaborators)
+        .where(
+          and(
+            eq(projectCollaborators.projectId, id),
+            eq(projectCollaborators.walletAddress, normalizedCollab)
+          )
+        )
+        .returning();
+
+      res.json({ success: true, data: deleted });
+    } catch (error) {
+      console.error("Error removing collaborator:", error);
+      res.status(500).json({ success: false, error: "Failed to remove collaborator" });
+    }
+  });
+
+  // ============================================
+  // Project Analytics & Insights
+  // ============================================
+
+  /**
+   * GET /api/projects/:id/analytics
+   * Get aggregated analytics for a project
+   */
+  app.get("/api/projects/:id/analytics", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, id))
+        .limit(1);
+
+      if (!project) {
+        return res.status(404).json({ success: false, error: "Project not found" });
+      }
+
+      // Get poll count and cached data
+      const polls = await db
+        .select()
+        .from(projectPolls)
+        .where(eq(projectPolls.projectId, id));
+
+      // Get questionnaire count and completion data
+      const questionnaireLinks = await db
+        .select()
+        .from(projectQuestionnaires)
+        .where(eq(projectQuestionnaires.projectId, id));
+
+      let totalCompletions = 0;
+      if (questionnaireLinks.length > 0) {
+        const questionnaireIds = questionnaireLinks.map((q) => q.questionnaireId);
+        const questionnaireData = await db
+          .select()
+          .from(questionnaires)
+          .where(sql`${questionnaires.id} IN (${sql.join(questionnaireIds.map(qid => sql`${qid}`), sql`, `)})`);
+        totalCompletions = questionnaireData.reduce((sum, q) => sum + q.completionCount, 0);
+      }
+
+      // Calculate total votes from cached poll data
+      const totalVotes = polls.reduce((sum, p) => sum + (p.cachedTotalVotes || 0), 0);
+
+      res.json({
+        success: true,
+        data: {
+          totalPolls: polls.length,
+          totalQuestionnaires: questionnaireLinks.length,
+          totalVotes,
+          totalCompletions,
+          lastUpdated: project.analyticsLastUpdated || project.updatedAt,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching project analytics:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch analytics" });
+    }
+  });
+
+  /**
+   * GET /api/projects/:id/insights
+   * Get AI-generated insights for a project (cached)
+   */
+  app.get("/api/projects/:id/insights", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { type } = req.query;
+
+      let query = db
+        .select()
+        .from(projectInsights)
+        .where(eq(projectInsights.projectId, id));
+
+      if (type) {
+        query = db
+          .select()
+          .from(projectInsights)
+          .where(
+            and(
+              eq(projectInsights.projectId, id),
+              eq(projectInsights.insightType, type as string)
+            )
+          );
+      }
+
+      const insights = await query.orderBy(desc(projectInsights.generatedAt));
+
+      res.json({ success: true, data: insights });
+    } catch (error) {
+      console.error("Error fetching project insights:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch insights" });
+    }
+  });
+
+  /**
+   * POST /api/projects/:id/insights/generate
+   * Generate new AI insights for a project
+   * Note: This is a placeholder - actual AI integration would need OpenAI API key
+   */
+  app.post("/api/projects/:id/insights/generate", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { insightType, address } = req.body;
+
+      if (!insightType || !address) {
+        return res.status(400).json({ success: false, error: "insightType and address are required" });
+      }
+
+      // Check access (need at least Editor role to generate insights)
+      const access = await checkProjectAccess(id, address, PROJECT_ROLE.EDITOR);
+      if (!access.hasAccess) {
+        return res.status(403).json({ success: false, error: "Access denied" });
+      }
+
+      const normalizedAddress = address.toLowerCase();
+
+      // TODO: Implement actual AI generation with OpenAI
+      // For now, create a placeholder insight
+      const [project] = await db
+        .select()
+        .from(projects)
+        .where(eq(projects.id, id))
+        .limit(1);
+
+      if (!project) {
+        return res.status(404).json({ success: false, error: "Project not found" });
+      }
+
+      // Get poll and questionnaire counts for snapshot
+      const polls = await db
+        .select()
+        .from(projectPolls)
+        .where(eq(projectPolls.projectId, id));
+
+      const questionnaireLinks = await db
+        .select()
+        .from(projectQuestionnaires)
+        .where(eq(projectQuestionnaires.projectId, id));
+
+      const totalVotes = polls.reduce((sum, p) => sum + (p.cachedTotalVotes || 0), 0);
+
+      // Create placeholder insight (replace with actual AI generation)
+      const placeholderContent = `## ${insightType.charAt(0).toUpperCase() + insightType.slice(1)} Insights
+
+This is a placeholder for AI-generated ${insightType} insights.
+
+**Project Stats:**
+- ${polls.length} polls with ${totalVotes} total votes
+- ${questionnaireLinks.length} questionnaires
+
+To enable AI insights, configure the OpenAI API key in your environment.`;
+
+      const [insight] = await db
+        .insert(projectInsights)
+        .values({
+          projectId: id,
+          insightType,
+          content: placeholderContent,
+          dataSnapshot: {
+            pollCount: polls.length,
+            questionnaireCount: questionnaireLinks.length,
+            totalVotes,
+            generatedAt: new Date().toISOString(),
+          },
+          requestedBy: normalizedAddress,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        })
+        .returning();
+
+      res.json({ success: true, data: insight });
+    } catch (error) {
+      console.error("Error generating project insights:", error);
+      res.status(500).json({ success: false, error: "Failed to generate insights" });
+    }
+  });
+
+  /**
+   * GET /api/projects/pending-invites/:address
+   * Get pending project invites for a user
+   */
+  app.get("/api/projects/pending-invites/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      const pendingInvites = await db
+        .select({
+          invite: projectCollaborators,
+          project: projects,
+        })
+        .from(projectCollaborators)
+        .innerJoin(projects, eq(projects.id, projectCollaborators.projectId))
+        .where(
+          and(
+            eq(projectCollaborators.walletAddress, normalizedAddress),
+            sql`${projectCollaborators.acceptedAt} IS NULL`
+          )
+        )
+        .orderBy(desc(projectCollaborators.invitedAt));
+
+      res.json({ success: true, data: pendingInvites });
+    } catch (error) {
+      console.error("Error fetching pending invites:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch invites" });
+    }
+  });
+
+  // ============================================
+  // Platform Statistics (for landing page)
+  // ============================================
+
+  /**
+   * GET /api/platform/stats
+   * Get platform-wide statistics for the landing page
+   * Query params: network (optional, defaults to "testnet")
+   * Returns: totalUsers, totalVotes (from database, filtered by network)
+   * Note: pollCount and rewardsDistributed come from blockchain (fetched by frontend)
+   */
+  app.get("/api/platform/stats", async (req, res) => {
+    try {
+      const { network: networkParam } = req.query;
+      const network = networkParam === "mainnet" ? "mainnet" : "testnet";
+
+      // Get total unique users who have voted on this network
+      const [userCount] = await db
+        .select({ count: sql<number>`count(distinct ${dailyVoteLogs.walletAddress})` })
+        .from(dailyVoteLogs)
+        .where(eq(dailyVoteLogs.network, network));
+
+      // Get total votes on this network (sum of all vote counts from daily logs)
+      const [voteSum] = await db
+        .select({ total: sql<number>`coalesce(sum(${dailyVoteLogs.voteCount}), 0)` })
+        .from(dailyVoteLogs)
+        .where(eq(dailyVoteLogs.network, network));
+
+      // Get total questionnaire completions (not network-specific for now)
+      const [completionCount] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(questionnaireProgress)
+        .where(eq(questionnaireProgress.isComplete, true));
+
+      res.json({
+        success: true,
+        data: {
+          totalUsers: Number(userCount?.count || 0),
+          totalVotes: Number(voteSum?.total || 0),
+          totalQuestionnaireCompletions: Number(completionCount?.count || 0),
+          network,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching platform stats:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch platform statistics" });
+    }
+  });
+
+  // ============================================
+  // PULSE Faucet Rate Limiting
+  // ============================================
+
+  /**
+   * GET /api/faucet/check
+   * Check if the user's IP can claim from the PULSE faucet
+   * Query params: network (required), wallet (required)
+   * Returns: canClaim (boolean), nextClaimTime (ISO string if rate limited)
+   */
+  app.get("/api/faucet/check", async (req, res) => {
+    try {
+      const { network, wallet } = req.query;
+
+      if (!network || !wallet) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required parameters: network and wallet"
+        });
+      }
+
+      // Faucet is only available on testnet
+      if (network !== "testnet") {
+        return res.status(403).json({
+          success: false,
+          error: "Faucet is only available on testnet"
+        });
+      }
+
+      // Get client IP (handle proxies)
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+        || req.socket.remoteAddress
+        || "unknown";
+
+      // Check for existing claim in the last 24 hours
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const [existingClaim] = await db
+        .select()
+        .from(faucetClaims)
+        .where(
+          and(
+            eq(faucetClaims.ipAddress, ip),
+            eq(faucetClaims.network, network as string),
+            gte(faucetClaims.claimedAt, twentyFourHoursAgo)
+          )
+        )
+        .orderBy(desc(faucetClaims.claimedAt))
+        .limit(1);
+
+      if (existingClaim) {
+        const nextClaimTime = new Date(existingClaim.claimedAt.getTime() + 24 * 60 * 60 * 1000);
+        return res.json({
+          success: true,
+          data: {
+            canClaim: false,
+            nextClaimTime: nextClaimTime.toISOString(),
+            lastClaimWallet: existingClaim.walletAddress,
+          },
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          canClaim: true,
+          nextClaimTime: null,
+        },
+      });
+    } catch (error) {
+      console.error("Error checking faucet eligibility:", error);
+      res.status(500).json({ success: false, error: "Failed to check faucet eligibility" });
+    }
+  });
+
+  /**
+   * POST /api/faucet/record
+   * Record a successful faucet claim
+   * Body: { network, wallet, txHash }
+   */
+  app.post("/api/faucet/record", async (req, res) => {
+    try {
+      const { network, wallet, txHash } = req.body;
+
+      if (!network || !wallet) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required parameters: network and wallet"
+        });
+      }
+
+      // Faucet is only available on testnet
+      if (network !== "testnet") {
+        return res.status(403).json({
+          success: false,
+          error: "Faucet is only available on testnet"
+        });
+      }
+
+      // Get client IP (handle proxies)
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+        || req.socket.remoteAddress
+        || "unknown";
+
+      // Double-check rate limit before recording
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const [existingClaim] = await db
+        .select()
+        .from(faucetClaims)
+        .where(
+          and(
+            eq(faucetClaims.ipAddress, ip),
+            eq(faucetClaims.network, network),
+            gte(faucetClaims.claimedAt, twentyFourHoursAgo)
+          )
+        )
+        .limit(1);
+
+      if (existingClaim) {
+        return res.status(429).json({
+          success: false,
+          error: "Rate limit exceeded. You can only claim once every 24 hours.",
+        });
+      }
+
+      // Record the claim
+      await db.insert(faucetClaims).values({
+        ipAddress: ip,
+        walletAddress: wallet,
+        network,
+        txHash: txHash || null,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          recorded: true,
+          nextClaimTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error("Error recording faucet claim:", error);
+      res.status(500).json({ success: false, error: "Failed to record faucet claim" });
+    }
+  });
+
+  return httpServer;
+}

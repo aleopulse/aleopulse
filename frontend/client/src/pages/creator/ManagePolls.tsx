@@ -1,0 +1,552 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Link, useLocation } from "wouter";
+import { CreatorLayout } from "@/components/layouts/CreatorLayout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Search,
+  RefreshCcw,
+  Plus,
+  AlertCircle,
+  ExternalLink,
+  XCircle,
+  Send,
+  Wallet,
+  MoreHorizontal,
+  Loader2,
+  CheckCircle2,
+  Flag,
+  Clock,
+} from "lucide-react";
+import { getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { useContract } from "@/hooks/useContract";
+import { useWalletConnection } from "@/hooks/useWalletConnection";
+import type { PollWithMeta } from "@/types/poll";
+import { POLL_STATUS, DISTRIBUTION_MODE } from "@/types/poll";
+import { useNetwork } from "@/contexts/NetworkContext";
+import { showTransactionSuccessToast, showTransactionErrorToast } from "@/lib/transaction-feedback";
+
+export default function ManagePolls() {
+  const [, navigate] = useLocation();
+  const { isConnected, address } = useWalletConnection();
+  const { getAllPolls, startClaims, closePoll, distributeRewards, withdrawRemaining, finalizePoll, canFinalizePoll, contractAddress } = useContract();
+  const { config } = useNetwork();
+
+  const [polls, setPolls] = useState<PollWithMeta[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("all");
+
+  // Modal states
+  const [closePollModal, setClosePollModal] = useState<{ open: boolean; pollId: number | null }>({
+    open: false,
+    pollId: null,
+  });
+  const [selectedDistributionMode, setSelectedDistributionMode] = useState<number>(DISTRIBUTION_MODE.MANUAL_PULL as number);
+  const [actionLoading, setActionLoading] = useState<{ type: string; pollId: number } | null>(null);
+  const [finalizablePolls, setFinalizablePolls] = useState<Set<number>>(new Set());
+
+  // Fetch polls
+  const fetchPolls = useCallback(async () => {
+    if (!contractAddress) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const allPolls = await getAllPolls();
+      setPolls(allPolls.sort((a, b) => b.id - a.id));
+
+      // Check which CLOSED polls can be finalized
+      const finalizableCandidates = allPolls.filter(
+        p => p.status === POLL_STATUS.CLOSED
+      );
+      const finalizableSet = new Set<number>();
+      for (const poll of finalizableCandidates) {
+        const canFinalize = await canFinalizePoll(poll.id);
+        if (canFinalize) {
+          finalizableSet.add(poll.id);
+        }
+      }
+      setFinalizablePolls(finalizableSet);
+    } catch (error) {
+      console.error("Failed to fetch polls:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getAllPolls, canFinalizePoll, contractAddress]);
+
+  useEffect(() => {
+    fetchPolls();
+  }, [fetchPolls]);
+
+  // Filter to creator's polls
+  const myPolls = useMemo(() => {
+    if (!address) return [];
+    return polls.filter(
+      (p) => p.creator.toLowerCase() === address.toLowerCase()
+    );
+  }, [polls, address]);
+
+  // Filter by tab and search
+  const filteredPolls = useMemo(() => {
+    let filtered = myPolls;
+
+    // Filter by tab
+    if (activeTab === "active") {
+      filtered = filtered.filter((p) => p.status === POLL_STATUS.ACTIVE);
+    } else if (activeTab === "closed") {
+      filtered = filtered.filter((p) => p.status === POLL_STATUS.CLOSED);
+    } else if (activeTab === "claiming") {
+      filtered = filtered.filter((p) => p.status === POLL_STATUS.CLAIMING);
+    } else if (activeTab === "finalized") {
+      filtered = filtered.filter((p) => p.status === POLL_STATUS.FINALIZED);
+    }
+
+    // Filter by search
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (p) =>
+          p.title.toLowerCase().includes(query) ||
+          p.description.toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [myPolls, activeTab, searchQuery]);
+
+  // Handle start claims (from ACTIVE status via modal)
+  // Transitions: ACTIVE → CLAIMING_OR_DISTRIBUTION
+  const handleStartClaims = async () => {
+    if (!closePollModal.pollId) return;
+
+    setActionLoading({ type: "startClaims", pollId: closePollModal.pollId });
+    try {
+      const result = await startClaims(closePollModal.pollId, selectedDistributionMode);
+      showTransactionSuccessToast(
+        result.hash,
+        "Claims Started!",
+        selectedDistributionMode === DISTRIBUTION_MODE.MANUAL_PULL
+          ? "Participants can now claim their rewards."
+          : "You can now distribute rewards to all voters.",
+        config.explorerUrl,
+        result.sponsored
+      );
+      setClosePollModal({ open: false, pollId: null });
+      await fetchPolls();
+    } catch (error) {
+      console.error("Failed to start claims:", error);
+      showTransactionErrorToast("Failed to start claims", error instanceof Error ? error : "Transaction failed");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle close poll (from CLAIMING_OR_DISTRIBUTION status)
+  // Transitions: CLAIMING_OR_DISTRIBUTION → CLOSED
+  const handleClosePoll = async (pollId: number) => {
+    setActionLoading({ type: "close", pollId });
+    try {
+      const result = await closePoll(pollId);
+      showTransactionSuccessToast(
+        result.hash,
+        "Poll Closed!",
+        "Claims/distributions have been stopped. You can finalize after the grace period.",
+        config.explorerUrl,
+        result.sponsored
+      );
+      await fetchPolls();
+    } catch (error) {
+      console.error("Failed to close poll:", error);
+      showTransactionErrorToast("Failed to close poll", error instanceof Error ? error : "Transaction failed");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle distribute rewards
+  const handleDistribute = async (pollId: number, coinTypeId: CoinTypeId) => {
+    setActionLoading({ type: "distribute", pollId });
+    try {
+      const result = await distributeRewards(pollId, coinTypeId);
+      showTransactionSuccessToast(
+        result.hash,
+        "Rewards Distributed!",
+        "All voters have received their rewards.",
+        config.explorerUrl,
+        result.sponsored
+      );
+      await fetchPolls();
+    } catch (error) {
+      console.error("Failed to distribute:", error);
+      showTransactionErrorToast("Failed to distribute rewards", error instanceof Error ? error : "Transaction failed");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle withdraw remaining
+  const handleWithdraw = async (pollId: number, coinTypeId: CoinTypeId) => {
+    setActionLoading({ type: "withdraw", pollId });
+    try {
+      const result = await withdrawRemaining(pollId, coinTypeId);
+      showTransactionSuccessToast(
+        result.hash,
+        "Funds Withdrawn!",
+        "Remaining funds have been returned to your wallet.",
+        config.explorerUrl,
+        result.sponsored
+      );
+      await fetchPolls();
+    } catch (error) {
+      console.error("Failed to withdraw:", error);
+      showTransactionErrorToast("Failed to withdraw funds", error instanceof Error ? error : "Transaction failed");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle finalize poll
+  const handleFinalize = async (pollId: number, coinTypeId: CoinTypeId) => {
+    setActionLoading({ type: "finalize", pollId });
+    try {
+      const result = await finalizePoll(pollId, coinTypeId);
+      showTransactionSuccessToast(
+        result.hash,
+        "Poll Finalized!",
+        "Unclaimed rewards have been sent to the treasury.",
+        config.explorerUrl,
+        result.sponsored
+      );
+      await fetchPolls();
+    } catch (error) {
+      console.error("Failed to finalize:", error);
+      showTransactionErrorToast("Failed to finalize poll", error instanceof Error ? error : "Transaction failed");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Get status badge
+  const getStatusBadge = (poll: PollWithMeta) => {
+    switch (poll.status) {
+      case POLL_STATUS.ACTIVE:
+        return <Badge className="bg-green-500/20 text-green-500 border-green-500/50">Active</Badge>;
+      case POLL_STATUS.CLAIMING:
+        return <Badge className="bg-yellow-500/20 text-yellow-500 border-yellow-500/50">Claiming</Badge>;
+      case POLL_STATUS.CLOSED:
+        return <Badge variant="secondary">Closed</Badge>;
+      case POLL_STATUS.FINALIZED:
+        return <Badge className="bg-blue-500/20 text-blue-500 border-blue-500/50">Finalized</Badge>;
+      default:
+        return <Badge variant="secondary">Unknown</Badge>;
+    }
+  };
+
+  // Loading skeleton
+  const PollRowSkeleton = () => (
+    <div className="flex items-center gap-4 p-4 border-b border-border/50">
+      <Skeleton className="h-5 w-5" />
+      <div className="flex-1">
+        <Skeleton className="h-5 w-48 mb-2" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+      <Skeleton className="h-6 w-16" />
+      <Skeleton className="h-8 w-8" />
+    </div>
+  );
+
+  if (!isConnected) {
+    return (
+      <CreatorLayout title="Manage Polls" description="View and manage all your polls">
+        <Card className="border-yellow-500/50 bg-yellow-500/10">
+          <CardContent className="flex items-center gap-3 py-6">
+            <AlertCircle className="w-5 h-5 text-yellow-500" />
+            <p className="text-yellow-600 dark:text-yellow-400">
+              Please connect your wallet to manage your polls.
+            </p>
+          </CardContent>
+        </Card>
+      </CreatorLayout>
+    );
+  }
+
+  return (
+    <CreatorLayout title="Manage Polls" description="View and manage all your polls">
+      {/* Search and Actions */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search polls..."
+            className="pl-10 bg-muted/30"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={fetchPolls}>
+            <RefreshCcw className="w-4 h-4 mr-2" /> Refresh
+          </Button>
+          <Link href="/create">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" /> Create Poll
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="bg-muted/30 mb-6">
+          <TabsTrigger value="all">All ({myPolls.length})</TabsTrigger>
+          <TabsTrigger value="active">
+            Active ({myPolls.filter((p) => p.status === POLL_STATUS.ACTIVE).length})
+          </TabsTrigger>
+          <TabsTrigger value="claiming">
+            Claiming ({myPolls.filter((p) => p.status === POLL_STATUS.CLAIMING).length})
+          </TabsTrigger>
+          <TabsTrigger value="closed">
+            Closed ({myPolls.filter((p) => p.status === POLL_STATUS.CLOSED).length})
+          </TabsTrigger>
+          <TabsTrigger value="finalized">
+            Finalized ({myPolls.filter((p) => p.status === POLL_STATUS.FINALIZED).length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={activeTab}>
+          <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+            {isLoading ? (
+              <div>
+                <PollRowSkeleton />
+                <PollRowSkeleton />
+                <PollRowSkeleton />
+              </div>
+            ) : filteredPolls.length === 0 ? (
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <p className="text-muted-foreground mb-4">
+                  {searchQuery ? "No polls match your search." : "No polls found in this category."}
+                </p>
+                {!searchQuery && (
+                  <Link href="/create">
+                    <Button>
+                      <Plus className="w-4 h-4 mr-2" /> Create Your First Poll
+                    </Button>
+                  </Link>
+                )}
+              </CardContent>
+            ) : (
+              <div className="divide-y divide-border/50">
+                {filteredPolls.map((poll) => {
+                  const rewardPool = poll.reward_pool / 1e8;
+                  const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
+                  const isActionLoading = actionLoading?.pollId === poll.id;
+
+                  return (
+                    <Link
+                      key={poll.id}
+                      href={`/creator/manage/${poll.id}`}
+                      className="flex items-center gap-4 p-4 hover:bg-muted/30 transition-colors cursor-pointer"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium hover:text-primary transition-colors truncate">
+                            {poll.title}
+                          </span>
+                          {getStatusBadge(poll)}
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {poll.totalVotes} votes • {rewardPool.toFixed(4)} {coinSymbol} • {poll.timeRemaining}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            navigate(`/poll/${poll.id}`);
+                          }}
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Button>
+
+                        {/* Hide dropdown for FINALIZED polls - no actions available */}
+                        {poll.status !== POLL_STATUS.FINALIZED && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                disabled={isActionLoading}
+                                onClick={(e) => e.preventDefault()}
+                              >
+                                {isActionLoading ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <MoreHorizontal className="w-4 h-4" />
+                                )}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {/* ACTIVE polls: Start Claims */}
+                              {poll.status === POLL_STATUS.ACTIVE && (
+                                <DropdownMenuItem
+                                  onClick={() => setClosePollModal({ open: true, pollId: poll.id })}
+                                >
+                                  <XCircle className="w-4 h-4 mr-2" /> Start Claims
+                                </DropdownMenuItem>
+                              )}
+                              {/* CLAIMING polls: Distribute Rewards (MANUAL_PUSH mode) */}
+                              {poll.status === POLL_STATUS.CLAIMING &&
+                                poll.distribution_mode === DISTRIBUTION_MODE.MANUAL_PUSH &&
+                                !poll.rewards_distributed && (
+                                  <DropdownMenuItem onClick={() => handleDistribute(poll.id, poll.coin_type_id as CoinTypeId)}>
+                                    <Send className="w-4 h-4 mr-2" /> Distribute Rewards
+                                  </DropdownMenuItem>
+                                )}
+                              {/* CLAIMING polls: Close Poll (stop claims/distributions) */}
+                              {poll.status === POLL_STATUS.CLAIMING && (
+                                <DropdownMenuItem onClick={() => handleClosePoll(poll.id)}>
+                                  <XCircle className="w-4 h-4 mr-2" /> Close Poll
+                                </DropdownMenuItem>
+                              )}
+                              {/* CLOSED polls: Withdraw Remaining (during grace period) */}
+                              {poll.status === POLL_STATUS.CLOSED && poll.reward_pool > 0 && (
+                                <DropdownMenuItem onClick={() => handleWithdraw(poll.id, poll.coin_type_id as CoinTypeId)}>
+                                  <Wallet className="w-4 h-4 mr-2" /> Withdraw Remaining
+                                </DropdownMenuItem>
+                              )}
+                              {/* CLOSED polls: Finalize Poll (when grace period elapsed) */}
+                              {poll.status === POLL_STATUS.CLOSED && finalizablePolls.has(poll.id) && (
+                                <DropdownMenuItem onClick={() => handleFinalize(poll.id, poll.coin_type_id as CoinTypeId)}>
+                                  <Flag className="w-4 h-4 mr-2" /> Finalize Poll
+                                </DropdownMenuItem>
+                              )}
+                              {/* CLOSED polls: Show disabled finalize when grace period not elapsed */}
+                              {poll.status === POLL_STATUS.CLOSED && !finalizablePolls.has(poll.id) && (
+                                <DropdownMenuItem disabled className="text-muted-foreground">
+                                  <Clock className="w-4 h-4 mr-2" /> Finalize (Grace period active)
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* Start Claims Modal */}
+      <Dialog open={closePollModal.open} onOpenChange={(open) => setClosePollModal({ open, pollId: open ? closePollModal.pollId : null })}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Start Claims & Select Distribution Mode</DialogTitle>
+            <DialogDescription>
+              Choose how rewards will be distributed to voters. You can close the poll later to stop claims/distributions.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <RadioGroup
+              value={selectedDistributionMode.toString()}
+              onValueChange={(value) => setSelectedDistributionMode(parseInt(value, 10))}
+              className="gap-4"
+            >
+              <div
+                className={`flex items-start space-x-3 border rounded-lg p-4 cursor-pointer transition-colors ${
+                  selectedDistributionMode === DISTRIBUTION_MODE.MANUAL_PULL
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:bg-muted/50"
+                }`}
+                onClick={() => setSelectedDistributionMode(DISTRIBUTION_MODE.MANUAL_PULL)}
+              >
+                <RadioGroupItem value={DISTRIBUTION_MODE.MANUAL_PULL.toString()} id="pull" className="mt-1" />
+                <div className="flex-1">
+                  <Label htmlFor="pull" className="font-semibold cursor-pointer">
+                    Voters Claim (Pull)
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Each voter can claim their own reward. Unclaimed funds can be withdrawn later.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className={`flex items-start space-x-3 border rounded-lg p-4 cursor-pointer transition-colors ${
+                  selectedDistributionMode === DISTRIBUTION_MODE.MANUAL_PUSH
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:bg-muted/50"
+                }`}
+                onClick={() => setSelectedDistributionMode(DISTRIBUTION_MODE.MANUAL_PUSH)}
+              >
+                <RadioGroupItem value={DISTRIBUTION_MODE.MANUAL_PUSH.toString()} id="push" className="mt-1" />
+                <div className="flex-1">
+                  <Label htmlFor="push" className="font-semibold cursor-pointer">
+                    Distribute to All (Push)
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    You distribute rewards to all voters in a single transaction.
+                  </p>
+                </div>
+              </div>
+            </RadioGroup>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => setClosePollModal({ open: false, pollId: null })}
+              disabled={actionLoading?.type === "startClaims"}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleStartClaims}
+              disabled={actionLoading?.type === "startClaims"}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {actionLoading?.type === "startClaims" ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Starting...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="w-4 h-4 mr-2" /> Start Claims
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </CreatorLayout>
+  );
+}
