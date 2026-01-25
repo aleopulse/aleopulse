@@ -1,3 +1,7 @@
+#
+frontend/test-results/
+frontend/playwright-report/
+
 # Dependencies
 node_modules/
 

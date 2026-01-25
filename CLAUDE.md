@@ -58,7 +58,25 @@ cd frontend && npm run db:push
 # Leo contract commands
 cd contracts/aleo/poll && leo run <function> <args>
 cd contracts/aleo/poll && leo build
+
+# E2E tests (uses Brave with Leo Wallet)
+cd frontend && npm run test:e2e        # Run all tests
+cd frontend && npm run test:e2e:ui     # Interactive UI mode
+cd frontend && npm run test:e2e:debug  # Debug mode
+cd frontend && npm run test:e2e:report # View test report
 ```
+
+## E2E Testing
+
+Tests use Playwright with Brave browser and the "playwright" profile (Profile 22) which has Leo Wallet installed.
+
+**Test files:** `frontend/e2e/`
+- `fixtures.ts` - Brave + Leo Wallet setup
+- `navigation.spec.ts` - Route navigation tests
+- `wallet.spec.ts` - Wallet connection tests
+- `poll.spec.ts` - Poll and questionnaire tests
+
+**Important:** Tests run with `headless: false` since browser extensions require a visible window.
 
 ## Leo Contract Patterns
 
