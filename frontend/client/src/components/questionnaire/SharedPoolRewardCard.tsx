@@ -110,20 +110,64 @@ export function SharedPoolRewardCard({
     return null;
   }
 
-  // If no on-chain pool yet, show placeholder
+  // If no on-chain pool yet, show "Coming Soon" state
+  // The shared pool contract doesn't exist yet - this feature is planned for future release
   if (!onChainId) {
     return (
-      <Card>
+      <Card className="border-primary/20">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Gift className="h-5 w-5" />
-            Shared Pool Rewards
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Gift className="h-5 w-5 text-primary" />
+              Shared Pool Rewards
+            </CardTitle>
+            <Badge variant="secondary" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+              Coming Soon
+            </Badge>
+          </div>
+          <CardDescription>
+            Complete all polls to earn from the shared reward pool
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="text-center py-4 text-muted-foreground">
-            <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-            <p>Reward pool not yet configured on-chain</p>
+        <CardContent className="space-y-4">
+          {/* Pool Stats Preview */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-2">
+              <Coins className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-sm text-muted-foreground">Total Pool</p>
+                <p className="font-semibold">
+                  {formatBalance(Number(totalRewardAmount), coinTypeId === 2 ? 6 : 8)} {getCoinSymbol(coinTypeId as CoinTypeId)}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <p className="text-sm text-muted-foreground">Max Completers</p>
+                <p className="font-semibold">{maxCompleters || "Unlimited"}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Coming Soon Notice */}
+          <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20 text-center">
+            <Clock className="h-8 w-8 mx-auto text-yellow-600 mb-2" />
+            <p className="font-medium text-yellow-700 dark:text-yellow-400">
+              Shared Pool Rewards Coming Soon
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              This feature requires an on-chain contract that is currently in development.
+              For now, rewards are distributed per individual poll.
+            </p>
+          </div>
+
+          {/* Tip for current rewards */}
+          <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
+            <p className="text-xs text-muted-foreground">
+              <strong>Tip:</strong> Participants can still earn rewards by voting on each poll
+              individually. Each poll in this questionnaire has its own reward pool.
+            </p>
           </div>
         </CardContent>
       </Card>

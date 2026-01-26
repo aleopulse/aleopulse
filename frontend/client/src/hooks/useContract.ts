@@ -12,7 +12,8 @@ import { POLL_STATUS, formatPollStatus, formatBlocksRemaining } from "@/lib/cont
 import { COIN_TYPES, formatTokenAmount } from "@/lib/tokens";
 import { fieldToString } from "@/lib/aleo-encoding";
 
-import type { Poll, PollWithMeta, CreatePollInput, VoteInput, TransactionResult, PlatformConfig } from "@/types/poll";
+import type { Poll, PollWithMeta, CreatePollInput, VoteInput, TransactionResult, PlatformConfig, PollSettings, PollInvite, PollTicket } from "@/types/poll";
+import { POLL_VISIBILITY } from "@/types/poll";
 
 // Extended transaction result with sponsorship info
 export interface TransactionResultWithSponsorship extends TransactionResult {
@@ -21,7 +22,7 @@ export interface TransactionResultWithSponsorship extends TransactionResult {
 
 export function useContract() {
   const { config, network } = useNetwork();
-  const { connected, address, executeTransaction, createPoll: createPollTx, vote: voteTx } = useAleoWallet();
+  const { connected, address, executeTransaction, createPoll: createPollTx, vote: voteTx, getRecords } = useAleoWallet();
   const { usePollCount, usePoll, refreshPolls } = useAleoPolls();
 
   const [loading, setLoading] = useState(false);
@@ -271,6 +272,125 @@ export function useContract() {
       return value === "true";
     },
     [indexer, contractAddress]
+  );
+
+  // Get poll settings (visibility, privacy mode, etc.)
+  const getPollSettings = useCallback(
+    async (pollId: number): Promise<PollSettings | null> => {
+      try {
+        const value = await indexer.getMappingValue(contractAddress, "poll_settings", `${pollId}u64`);
+        if (!value) return null;
+
+        // Parse PollSettings struct: { privacy_mode: Xu8, show_results_live: true/false, require_receipt: true/false, visibility: Yu8 }
+        const match = value.match(/\{([^}]+)\}/);
+        if (!match) return null;
+
+        const content = match[1];
+        const fields: Record<string, string> = {};
+
+        const pairs = content.split(",").map((p) => p.trim());
+        for (const pair of pairs) {
+          const colonIndex = pair.indexOf(":");
+          if (colonIndex > -1) {
+            const key = pair.slice(0, colonIndex).trim();
+            const val = pair.slice(colonIndex + 1).trim();
+            if (key && val) {
+              fields[key] = val;
+            }
+          }
+        }
+
+        return {
+          privacy_mode: parseInt(fields.privacy_mode?.replace("u8", "") || "0", 10),
+          show_results_live: fields.show_results_live === "true",
+          require_receipt: fields.require_receipt === "true",
+          visibility: parseInt(fields.visibility?.replace("u8", "") || "0", 10),
+        };
+      } catch (error) {
+        console.error("Error fetching poll settings:", error);
+        return null;
+      }
+    },
+    [indexer, contractAddress]
+  );
+
+  // Get user's PollInvite records for accessible private polls
+  const getUserPollInvites = useCallback(
+    async (): Promise<PollInvite[]> => {
+      if (!connected || !getRecords) {
+        return [];
+      }
+
+      try {
+        const records = await getRecords(contractAddress);
+        if (!records || !Array.isArray(records)) return [];
+
+        const invites: PollInvite[] = [];
+
+        for (const record of records) {
+          // Check if this is a PollInvite record
+          if (record.recordName === "PollInvite" || record.data?.poll_id !== undefined) {
+            try {
+              const data = record.data || record;
+              invites.push({
+                owner: data.owner || address || "",
+                poll_id: parseInt(String(data.poll_id).replace("u64", ""), 10),
+                can_vote: data.can_vote === true || data.can_vote === "true",
+                expires_block: parseInt(String(data.expires_block).replace("u32", ""), 10),
+              });
+            } catch (parseError) {
+              console.error("Error parsing PollInvite record:", parseError);
+            }
+          }
+        }
+
+        return invites;
+      } catch (error) {
+        console.error("Error fetching PollInvite records:", error);
+        return [];
+      }
+    },
+    [connected, getRecords, contractAddress, address]
+  );
+
+  // Get user's PollTicket records (for poll creators to issue invites)
+  const getPollTickets = useCallback(
+    async (): Promise<PollTicket[]> => {
+      if (!connected || !getRecords) {
+        return [];
+      }
+
+      try {
+        const records = await getRecords(contractAddress);
+        if (!records || !Array.isArray(records)) return [];
+
+        const tickets: PollTicket[] = [];
+
+        for (const record of records) {
+          // Check if this is a PollTicket record
+          if (record.recordName === "PollTicket" || (record.data?.poll_id !== undefined && record.data?.can_vote === undefined)) {
+            try {
+              const data = record.data || record;
+              // PollTicket has owner and poll_id, but no can_vote or expires_block
+              if (data.can_vote === undefined && data.expires_block === undefined) {
+                tickets.push({
+                  owner: data.owner || address || "",
+                  poll_id: parseInt(String(data.poll_id).replace("u64", ""), 10),
+                });
+              }
+            } catch (parseError) {
+              console.error("Error parsing PollTicket record:", parseError);
+            }
+          }
+        }
+
+        return tickets;
+      } catch (error) {
+        console.error("Error fetching PollTicket records:", error);
+        return [];
+      }
+    },
+    [connected, getRecords, contractAddress, address]
   );
 
   // Start claims on a poll
@@ -761,6 +881,9 @@ export function useContract() {
     canFinalizePoll,
     isFAStoreInitialized,
     isPollPrivate,
+    getPollSettings,
+    getUserPollInvites,
+    getPollTickets,
 
     // Questionnaire pool read functions
     hasCompletedQuestionnaire,

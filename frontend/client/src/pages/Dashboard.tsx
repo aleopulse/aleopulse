@@ -10,7 +10,9 @@ import { Input } from "@/components/ui/input";
 import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import { useNetwork } from "@/contexts/NetworkContext";
-import type { PollWithMeta } from "@/types/poll";
+import { useBlockHeight } from "@/hooks/useAleoPolls";
+import type { PollWithMeta, PollSettings, PollInvite } from "@/types/poll";
+import { POLL_VISIBILITY } from "@/types/poll";
 import { getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
 import { toast } from "sonner";
 
@@ -21,8 +23,9 @@ const AGGRESSIVE_REFRESH_INTERVAL = 5000; // 5 seconds when pending tx
 export default function Dashboard() {
   const [location] = useLocation();
   const { isConnected, address } = useWalletConnection();
-  const { getAllPolls, getPollCount, contractAddress } = useContract();
+  const { getAllPolls, getPollCount, contractAddress, getPollSettings, getUserPollInvites } = useContract();
   const { config } = useNetwork();
+  const { data: currentBlock } = useBlockHeight();
 
   const [role, setRole] = useState<"creator" | "participant">("creator");
   const [polls, setPolls] = useState<PollWithMeta[]>([]);
@@ -31,6 +34,10 @@ export default function Dashboard() {
   const [pendingTxId, setPendingTxId] = useState<string | null>(null);
   const previousPollCountRef = useRef<number>(0);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // State for poll visibility and user invites
+  const [pollSettingsMap, setPollSettingsMap] = useState<Map<number, PollSettings>>(new Map());
+  const [userInvites, setUserInvites] = useState<PollInvite[]>([]);
 
   // Check for pending transaction on mount
   useEffect(() => {
@@ -73,12 +80,32 @@ export default function Dashboard() {
 
       previousPollCountRef.current = sortedPolls.length;
       setPolls(sortedPolls);
+
+      // Fetch poll settings for all polls (to determine visibility)
+      const settingsPromises = sortedPolls.map(async (poll) => {
+        const settings = await getPollSettings(poll.id);
+        return { pollId: poll.id, settings };
+      });
+      const settingsResults = await Promise.all(settingsPromises);
+      const newSettingsMap = new Map<number, PollSettings>();
+      settingsResults.forEach(({ pollId, settings }) => {
+        if (settings) {
+          newSettingsMap.set(pollId, settings);
+        }
+      });
+      setPollSettingsMap(newSettingsMap);
+
+      // Fetch user invites if connected
+      if (isConnected) {
+        const invites = await getUserPollInvites();
+        setUserInvites(invites);
+      }
     } catch (error) {
       console.error("Failed to fetch polls:", error);
     } finally {
       setIsLoading(false);
     }
-  }, [getAllPolls, contractAddress, pendingTxId]);
+  }, [getAllPolls, contractAddress, pendingTxId, getPollSettings, getUserPollInvites, isConnected]);
 
   useEffect(() => {
     fetchPolls();
@@ -105,11 +132,48 @@ export default function Dashboard() {
     };
   }, [pendingTxId, fetchPolls]);
 
-  // Filter polls by status and creator
-  const activePolls = polls.filter((p) => p.isActive);
-  const closedPolls = polls.filter((p) => !p.isActive);
+  // Helper: Check if user has valid invite for a poll
+  const hasValidInvite = useCallback(
+    (pollId: number): boolean => {
+      const invite = userInvites.find((inv) => inv.poll_id === pollId);
+      if (!invite) return false;
+      // Check if invite is still valid (not expired)
+      if (currentBlock && invite.expires_block <= currentBlock) return false;
+      return true;
+    },
+    [userInvites, currentBlock]
+  );
 
-  // Filter by creator for creator view
+  // Helper: Check if poll is private
+  const isPollPrivate = useCallback(
+    (pollId: number): boolean => {
+      const settings = pollSettingsMap.get(pollId);
+      return settings?.visibility === POLL_VISIBILITY.PRIVATE;
+    },
+    [pollSettingsMap]
+  );
+
+  // Helper: Check if user can access a poll (public OR has valid invite OR is creator)
+  const canAccessPoll = useCallback(
+    (poll: PollWithMeta): boolean => {
+      const isPrivate = isPollPrivate(poll.id);
+      if (!isPrivate) return true; // Public polls are accessible to everyone
+
+      // Private poll access: creator or valid invite
+      const isCreator = address && poll.creator.toLowerCase() === address.toLowerCase();
+      if (isCreator) return true;
+
+      return hasValidInvite(poll.id);
+    },
+    [isPollPrivate, hasValidInvite, address]
+  );
+
+  // Filter polls by status and creator, excluding inaccessible private polls
+  const accessiblePolls = polls.filter(canAccessPoll);
+  const activePolls = accessiblePolls.filter((p) => p.isActive);
+  const closedPolls = accessiblePolls.filter((p) => !p.isActive);
+
+  // Filter by creator for creator view (creators see all their polls)
   const myPolls = polls.filter(
     (p) => address && p.creator.toLowerCase() === address.toLowerCase()
   );
@@ -155,6 +219,8 @@ export default function Dashboard() {
   const renderPollCard = (poll: PollWithMeta) => {
     const rewardPool = poll.reward_pool / 1e8;
     const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
+    const isPrivate = isPollPrivate(poll.id);
+    const hasInvite = hasValidInvite(poll.id);
     return (
       <PollCard
         key={poll.id}
@@ -166,6 +232,8 @@ export default function Dashboard() {
         reward={rewardPool > 0 ? `${rewardPool.toFixed(2)} ${coinSymbol}` : undefined}
         status={poll.isActive ? "active" : "closed"}
         tags={[]}
+        isPrivate={isPrivate}
+        hasInvite={hasInvite}
       />
     );
   };

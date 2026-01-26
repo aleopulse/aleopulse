@@ -53,20 +53,22 @@ import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { truncateAddress } from "@/lib/contract";
-import type { PollWithMeta } from "@/types/poll";
-import { POLL_STATUS, DISTRIBUTION_MODE } from "@/types/poll";
+import type { PollWithMeta, PollSettings } from "@/types/poll";
+import { POLL_STATUS, DISTRIBUTION_MODE, POLL_VISIBILITY } from "@/types/poll";
 import { getCoinSymbol, CoinTypeId } from "@/lib/tokens";
 import { toast } from "sonner";
 import { showTransactionSuccessToast, showTransactionErrorToast } from "@/lib/transaction-feedback";
+import { InviteManager } from "@/components/poll";
 
 export default function ManagePoll() {
   const { pollId: pollIdParam } = useParams();
   const [, navigate] = useLocation();
   const { isConnected, address } = useWalletConnection();
-  const { getPoll, startClaims, distributeRewards, withdrawRemaining, contractAddress } = useContract();
+  const { getPoll, startClaims, distributeRewards, withdrawRemaining, contractAddress, getPollSettings } = useContract();
   const { config } = useNetwork();
 
   const [poll, setPoll] = useState<PollWithMeta | null>(null);
+  const [pollSettings, setPollSettings] = useState<PollSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isVotersOpen, setIsVotersOpen] = useState(false);
 
@@ -86,15 +88,19 @@ export default function ManagePoll() {
 
     setIsLoading(true);
     try {
-      const pollData = await getPoll(pollId);
+      const [pollData, settings] = await Promise.all([
+        getPoll(pollId),
+        getPollSettings(pollId),
+      ]);
       setPoll(pollData);
+      setPollSettings(settings);
     } catch (error) {
       console.error("Failed to fetch poll:", error);
       toast.error("Failed to load poll data");
     } finally {
       setIsLoading(false);
     }
-  }, [pollId, getPoll, contractAddress]);
+  }, [pollId, getPoll, getPollSettings, contractAddress]);
 
   useEffect(() => {
     fetchPoll();
@@ -461,6 +467,11 @@ export default function ManagePoll() {
               </CollapsibleContent>
             </Card>
           </Collapsible>
+
+          {/* Invite Manager for Private Polls */}
+          {pollSettings?.visibility === POLL_VISIBILITY.PRIVATE && pollId !== null && (
+            <InviteManager pollId={pollId} isPrivate={true} />
+          )}
         </div>
 
         {/* Right Column - Actions & Details */}

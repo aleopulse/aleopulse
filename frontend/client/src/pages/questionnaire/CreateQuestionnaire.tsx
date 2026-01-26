@@ -1025,7 +1025,7 @@ export default function CreateQuestionnaire() {
                   </div>
 
                   <div
-                    className={`p-4 border rounded-lg cursor-pointer ${
+                    className={`p-4 border rounded-lg cursor-not-allowed opacity-60 ${
                       rewardType === "shared_pool" ? "border-primary bg-primary/5" : ""
                     }`}
                   >
@@ -1034,14 +1034,23 @@ export default function CreateQuestionnaire() {
                         value="shared_pool"
                         id="shared_pool"
                         className="mt-1"
+                        disabled
                       />
-                      <div>
-                        <Label htmlFor="shared_pool" className="font-medium cursor-pointer">
-                          Shared Pool Rewards
-                        </Label>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor="shared_pool" className="font-medium cursor-not-allowed">
+                            Shared Pool Rewards
+                          </Label>
+                          <Badge variant="secondary" className="text-[10px] bg-yellow-500/10 text-yellow-600 border-yellow-500/30">
+                            Coming Soon
+                          </Badge>
+                        </div>
                         <p className="text-sm text-muted-foreground">
                           Single reward pool for the entire questionnaire. Only users who
                           complete ALL polls can claim from the shared pool.
+                        </p>
+                        <p className="text-xs text-yellow-600 mt-1">
+                          This feature requires an on-chain contract that is currently in development.
                         </p>
                       </div>
                     </div>

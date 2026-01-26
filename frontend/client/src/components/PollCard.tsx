@@ -2,7 +2,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Clock, Users, Trophy, ArrowRight } from "lucide-react";
+import { Clock, Users, Trophy, ArrowRight, Lock, Mail } from "lucide-react";
 import { Link } from "wouter";
 
 interface PollProps {
@@ -16,9 +16,11 @@ interface PollProps {
   tags: string[];
   hasVoted?: boolean;
   actionLabel?: string; // Custom button text (e.g., "Fund" for donors, "Participate" for participants)
+  isPrivate?: boolean; // Whether this is a private (invite-only) poll
+  hasInvite?: boolean; // Whether user has an invite to this private poll
 }
 
-export function PollCard({ id, title, description, votes, timeLeft, reward, status, tags, hasVoted, actionLabel }: PollProps) {
+export function PollCard({ id, title, description, votes, timeLeft, reward, status, tags, hasVoted, actionLabel, isPrivate, hasInvite }: PollProps) {
   // Determine button text: custom label > "View Results" if voted/closed > default "Participate"
   const buttonText = status === "closed" || hasVoted
     ? "View Results"
@@ -29,10 +31,23 @@ export function PollCard({ id, title, description, votes, timeLeft, reward, stat
       {status === "active" && (
         <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-bl-full -mr-8 -mt-8 transition-all group-hover:bg-primary/20" />
       )}
-      
+
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start mb-2">
           <div className="flex gap-2 flex-wrap">
+            {isPrivate && (
+              <Badge
+                variant="outline"
+                className={`text-[10px] uppercase tracking-wider font-bold flex items-center gap-1 ${
+                  hasInvite
+                    ? "border-green-500/50 text-green-600 bg-green-500/10"
+                    : "border-yellow-500/50 text-yellow-600 bg-yellow-500/10"
+                }`}
+              >
+                {hasInvite ? <Mail className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                {hasInvite ? "Invited" : "Private"}
+              </Badge>
+            )}
             {tags.map(tag => (
               <Badge key={tag} variant="secondary" className="text-[10px] uppercase tracking-wider font-bold bg-muted/50 text-muted-foreground border-transparent">
                 {tag}
