@@ -1,15 +1,19 @@
 // The Poll program - privacy-preserving polls and surveys for LeoPulse
 // Supports configurable privacy: anonymous, semi-private, and identified voting
 
-program leopulse_poll.aleo {
+program leopulse_poll_v2.aleo {
     // ============================================
     // CONSTANTS
     // ============================================
 
-    // Privacy modes
+    // Privacy modes (for vote choices)
     const PRIVACY_ANONYMOUS: u8 = 0u8;
     const PRIVACY_SEMI_PRIVATE: u8 = 1u8;
     const PRIVACY_IDENTIFIED: u8 = 2u8;
+
+    // Poll visibility modes
+    const VISIBILITY_PUBLIC: u8 = 0u8;
+    const VISIBILITY_PRIVATE: u8 = 1u8;
 
     // Poll status
     const STATUS_ACTIVE: u8 = 0u8;
@@ -36,6 +40,7 @@ program leopulse_poll.aleo {
         privacy_mode: u8,
         show_results_live: bool,
         require_receipt: bool,
+        visibility: u8,  // 0 = public, 1 = private (invite-only)
     }
 
     // Core poll information - use u32 for block heights
@@ -85,6 +90,7 @@ program leopulse_poll.aleo {
         duration_blocks: u32,
         fund_amount: u64,
         token_id: field,
+        visibility: u8,  // 0 = public, 1 = private
     }
 
     // ============================================
@@ -111,6 +117,14 @@ program leopulse_poll.aleo {
         is_active: bool,
     }
 
+    // Invite record for private polls
+    record PollInvite {
+        owner: address,
+        poll_id: u64,
+        can_vote: bool,
+        expires_block: u32,
+    }
+
     // ============================================
     // MAPPINGS (Public State)
     // ============================================
@@ -125,6 +139,10 @@ program leopulse_poll.aleo {
     mapping has_voted: field => bool;
     mapping public_votes: field => u8;
     mapping has_claimed: field => bool;
+    // Track which polls are private (visibility = 1)
+    mapping private_polls: u64 => bool;
+    // Track invite count per poll (for management)
+    mapping invite_counts: u64 => u64;
 
     // ============================================
     // CONSTRUCTOR
@@ -216,6 +234,7 @@ program leopulse_poll.aleo {
         assert(input.option_count > 0u8);
         assert(input.option_count <= MAX_OPTIONS);
         assert(input.privacy_mode <= PRIVACY_IDENTIFIED);
+        assert(input.visibility <= VISIBILITY_PRIVATE);
 
         let ticket: PollTicket = PollTicket {
             owner: self.caller,
@@ -257,11 +276,18 @@ program leopulse_poll.aleo {
             privacy_mode: input.privacy_mode,
             show_results_live: input.show_results_live,
             require_receipt: true,
+            visibility: input.visibility,
         };
 
         Mapping::set(polls, poll_id, poll_info);
         Mapping::set(poll_settings, poll_id, settings);
         Mapping::set(total_voters, poll_id, 0u64);
+
+        // Mark as private if visibility is set to private
+        if input.visibility == VISIBILITY_PRIVATE {
+            Mapping::set(private_polls, poll_id, true);
+            Mapping::set(invite_counts, poll_id, 0u64);
+        }
 
         // Store options
         if input.option_count > 0u8 {
@@ -344,6 +370,105 @@ program leopulse_poll.aleo {
 
         Mapping::set(total_voters, poll_id, current_voters + 1u64);
 
+        if settings.privacy_mode == PRIVACY_IDENTIFIED {
+            Mapping::set(public_votes, voter_key, option_index);
+        }
+    }
+
+    // ============================================
+    // PRIVATE POLL INVITATIONS
+    // ============================================
+
+    // Issue an invite to a private poll (creator only)
+    // Uses PollTicket to prove ownership
+    transition invite_to_poll(
+        ticket: PollTicket,
+        invitee: address,
+        can_vote: bool,
+        expires_block: u32
+    ) -> (PollInvite, PollTicket) {
+        // Verify ticket is active (implicit ownership via record consumption)
+        assert(ticket.is_active);
+
+        // Create invite for the invitee
+        let invite: PollInvite = PollInvite {
+            owner: invitee,
+            poll_id: ticket.poll_id,
+            can_vote: can_vote,
+            expires_block: expires_block,
+        };
+
+        // Return new ticket to creator (so they can issue more invites)
+        let new_ticket: PollTicket = PollTicket {
+            owner: ticket.owner,
+            poll_id: ticket.poll_id,
+            is_active: ticket.is_active,
+        };
+
+        return (invite, new_ticket);
+    }
+
+    // Vote on a private poll using an invite record
+    async transition vote_private(
+        invite: PollInvite,
+        public option_index: u8
+    ) -> (VoteReceipt, Future) {
+        // Verify invite allows voting
+        assert(invite.can_vote);
+
+        // Create receipt for the voter
+        let receipt: VoteReceipt = VoteReceipt {
+            owner: invite.owner,
+            poll_id: invite.poll_id,
+            option_index: option_index,
+            voted_at: 0u32,  // Placeholder - actual block recorded in mapping
+        };
+
+        return (receipt, finalize_vote_private(invite.poll_id, option_index, invite.owner, invite.expires_block));
+    }
+
+    async function finalize_vote_private(
+        poll_id: u64,
+        option_index: u8,
+        voter: address,
+        expires_block: u32
+    ) {
+        let poll_info: PollInfo = Mapping::get(polls, poll_id);
+        let settings: PollSettings = Mapping::get(poll_settings, poll_id);
+
+        // Verify poll is private
+        assert_eq(settings.visibility, VISIBILITY_PRIVATE);
+
+        // Verify poll is active
+        assert_eq(poll_info.status, STATUS_ACTIVE);
+        assert(block.height <= poll_info.end_block);
+
+        // Verify invite hasn't expired
+        assert(block.height <= expires_block);
+
+        // Verify valid option
+        assert(option_index < poll_info.option_count);
+
+        // Check max voters if set
+        let current_voters: u64 = Mapping::get(total_voters, poll_id);
+        if poll_info.max_voters > 0u64 {
+            assert(current_voters < poll_info.max_voters);
+        }
+
+        // Check not already voted
+        let voter_key: field = BHP256::hash_to_field(poll_id as field + voter as field);
+        assert(!Mapping::contains(has_voted, voter_key));
+
+        // Record vote
+        Mapping::set(has_voted, voter_key, true);
+
+        let option_key: field = BHP256::hash_to_field(poll_id as field + option_index as field);
+        let current_count: u64 = Mapping::get_or_use(vote_counts, option_key, 0u64);
+        Mapping::set(vote_counts, option_key, current_count + 1u64);
+
+        Mapping::set(total_voters, poll_id, current_voters + 1u64);
+
+        // Handle identified privacy mode
         if settings.privacy_mode == PRIVACY_IDENTIFIED {
             Mapping::set(public_votes, voter_key, option_index);
         }

@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Plus, Trash2, Sparkles, ArrowRight, ArrowLeft, Check, Loader2, Wallet, Coins, Info, Calculator, Bot, Shield, Eye, EyeOff } from "lucide-react";
+import { Plus, Trash2, Sparkles, ArrowRight, ArrowLeft, Check, Loader2, Wallet, Coins, Info, Calculator, Bot, Shield, Eye, EyeOff, Globe, Lock } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useContract } from "@/hooks/useContract";
@@ -13,7 +13,7 @@ import { useWalletConnection } from "@/hooks/useWalletConnection";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { REWARD_TYPE, PLATFORM_FEE_BPS, calculatePlatformFee, calculateNetAmount, PRIVACY_MODE } from "@/types/poll";
+import { REWARD_TYPE, PLATFORM_FEE_BPS, calculatePlatformFee, calculateNetAmount, PRIVACY_MODE, POLL_VISIBILITY } from "@/types/poll";
 import { COIN_TYPES, getCoinSymbol, CoinTypeId } from "@/lib/tokens";
 import { TransactionConfirmationDialog } from "@/components/TransactionConfirmationDialog";
 import { showTransactionSuccessToast, showTransactionErrorToast } from "@/lib/transaction-feedback";
@@ -27,6 +27,7 @@ const DURATION_OPTIONS = {
 };
 
 export type PrivacyMode = typeof PRIVACY_MODE[keyof typeof PRIVACY_MODE];
+export type PollVisibility = typeof POLL_VISIBILITY[keyof typeof POLL_VISIBILITY];
 
 // AI-generated poll type (matching AIChatAssistant)
 interface AIGeneratedPoll {
@@ -41,6 +42,7 @@ interface AIGeneratedPoll {
   maxResponders: number;
   rewardPerVoter?: number;
   privacyMode?: PrivacyMode;
+  visibility?: PollVisibility;
 }
 
 export default function CreatePoll() {
@@ -63,6 +65,7 @@ export default function CreatePoll() {
   const [options, setOptions] = useState(["", ""]);
   const [fromAI, setFromAI] = useState(false);
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>(PRIVACY_MODE.ANONYMOUS);
+  const [visibility, setVisibility] = useState<PollVisibility>(POLL_VISIBILITY.PUBLIC);
 
   // Incentives state
   const [rewardType, setRewardType] = useState<number>(REWARD_TYPE.NONE);
@@ -101,6 +104,11 @@ export default function CreatePoll() {
           // Load privacy mode if specified
           if (poll.privacyMode !== undefined) {
             setPrivacyMode(poll.privacyMode);
+          }
+
+          // Load visibility if specified
+          if (poll.visibility !== undefined) {
+            setVisibility(poll.visibility);
           }
 
           // Clear the stored poll after loading
@@ -229,6 +237,7 @@ export default function CreatePoll() {
         fundAmount: fundAmountOctas,
         coinTypeId: selectedToken,
         privacyMode,
+        visibility,
       });
 
       showTransactionSuccessToast(
@@ -238,6 +247,11 @@ export default function CreatePoll() {
         config.explorerUrl,
         result.sponsored
       );
+
+      // Store pending transaction ID for dashboard to track
+      if (result.hash) {
+        sessionStorage.setItem("pending-poll-tx", result.hash);
+      }
 
       // Navigate to dashboard after success
       setTimeout(() => setLocation("/dashboard"), 1500);
@@ -490,6 +504,64 @@ export default function CreatePoll() {
                       </div>
                       <p className="text-xs text-muted-foreground mt-1">
                         Fully transparent. Both voter identity and vote choice are publicly visible on-chain.
+                      </p>
+                    </div>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Poll Visibility Selection */}
+              <div className="space-y-3 pt-2">
+                <Label className="flex items-center gap-2">
+                  <Globe className="w-4 h-4" />
+                  Poll Visibility *
+                </Label>
+                <RadioGroup
+                  value={visibility.toString()}
+                  onValueChange={(v) => setVisibility(parseInt(v) as PollVisibility)}
+                  className="grid grid-cols-2 gap-3"
+                >
+                  {/* Public */}
+                  <div
+                    className={cn(
+                      "flex items-start space-x-3 rounded-md border p-3 cursor-pointer transition-all",
+                      visibility === POLL_VISIBILITY.PUBLIC
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted/50"
+                    )}
+                    onClick={() => setVisibility(POLL_VISIBILITY.PUBLIC)}
+                  >
+                    <RadioGroupItem value={POLL_VISIBILITY.PUBLIC.toString()} id="visibility-public" className="mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-4 h-4 text-green-500" />
+                        <Label htmlFor="visibility-public" className="cursor-pointer font-medium">Public</Label>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Anyone can see and vote on this poll.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Private */}
+                  <div
+                    className={cn(
+                      "flex items-start space-x-3 rounded-md border p-3 cursor-pointer transition-all",
+                      visibility === POLL_VISIBILITY.PRIVATE
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:bg-muted/50"
+                    )}
+                    onClick={() => setVisibility(POLL_VISIBILITY.PRIVATE)}
+                  >
+                    <RadioGroupItem value={POLL_VISIBILITY.PRIVATE.toString()} id="visibility-private" className="mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <Lock className="w-4 h-4 text-orange-500" />
+                        <Label htmlFor="visibility-private" className="cursor-pointer font-medium">Private</Label>
+                        <span className="text-xs bg-orange-500/10 text-orange-600 px-2 py-0.5 rounded-full">Invite-only</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Only invited participants can see and vote.
                       </p>
                     </div>
                   </div>

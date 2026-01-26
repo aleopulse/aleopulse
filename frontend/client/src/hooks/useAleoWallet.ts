@@ -129,6 +129,7 @@ export function useAleoWallet() {
       durationBlocks: number;
       fundAmount: bigint;
       tokenId: string;
+      visibility?: number; // 0 = public (default), 1 = private
     }) => {
       // Format CreatePollInput as a Leo struct literal
       // Struct fields must be in the same order as defined in the contract
@@ -146,7 +147,8 @@ export function useAleoWallet() {
         max_voters: ${toU64(params.maxVoters)},
         duration_blocks: ${toU32(params.durationBlocks)},
         fund_amount: ${toU64(params.fundAmount)},
-        token_id: ${params.tokenId}
+        token_id: ${params.tokenId},
+        visibility: ${toU8(params.visibility ?? 0)}
       }`;
 
       return executeTransaction({

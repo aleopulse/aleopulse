@@ -41,7 +41,8 @@ export function useAleoPolls() {
         );
         return value ? parseU64(value) : BigInt(0);
       },
-      staleTime: 30000, // 30 seconds
+      staleTime: 10000, // 10 seconds - reduced for faster updates
+      refetchInterval: 15000, // Auto-refresh every 15 seconds
     });
 
   /**
@@ -102,7 +103,8 @@ export function useAleoPolls() {
         return poll;
       },
       enabled: pollId !== null,
-      staleTime: 30000,
+      staleTime: 10000, // 10 seconds - reduced for faster updates
+      refetchInterval: 15000, // Auto-refresh every 15 seconds
     });
 
   /**
@@ -153,7 +155,8 @@ export function useAleoPolls() {
 
         return { polls, totalCount, page, limit };
       },
-      staleTime: 30000,
+      staleTime: 10000, // 10 seconds - reduced for faster updates
+      refetchInterval: 15000, // Auto-refresh every 15 seconds
     });
 
   /**
@@ -175,7 +178,7 @@ export function useAleoPolls() {
         return value === "true";
       },
       enabled: pollId !== null && !!userAddress,
-      staleTime: 30000,
+      staleTime: 10000, // 10 seconds - reduced for faster updates
     });
 
   /**

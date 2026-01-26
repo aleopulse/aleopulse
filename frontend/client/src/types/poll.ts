@@ -66,6 +66,20 @@ export const PRIVACY_MODE = {
   IDENTIFIED: 2,     // Voter identity and choices both publicly visible
 } as const;
 
+// Poll visibility modes
+export const POLL_VISIBILITY = {
+  PUBLIC: 0,   // Visible to everyone
+  PRIVATE: 1,  // Invite-only, requires PollInvite record
+} as const;
+
+// Type for poll invite record (from Leo contract)
+export interface PollInvite {
+  owner: string;
+  poll_id: number;
+  can_vote: boolean;
+  expires_block: number;
+}
+
 // Input for creating a new poll
 export interface CreatePollInput {
   title: string;
@@ -77,6 +91,7 @@ export interface CreatePollInput {
   fundAmount: number;       // Total deposit INCLUDING platform fee (in microcredits)
   coinTypeId: number;       // 0 = Credits, 1 = PULSE
   privacyMode?: number;     // 0 = Anonymous (default), 1 = Semi-Private, 2 = Identified
+  visibility?: number;      // 0 = Public (default), 1 = Private (invite-only)
 }
 
 // Vote input

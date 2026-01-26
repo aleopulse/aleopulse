@@ -80,19 +80,27 @@ Tests use Playwright with Brave browser and the "playwright" profile (Profile 22
 
 ## Leo Contract Patterns
 
+**Current program:** `leopulse_poll_v2.aleo` (deployed on testnet)
+
 **Privacy modes:** anonymous (0), semi-private (1), identified (2)
+
+**Visibility modes:** public (0), private/invite-only (1)
 
 **Poll lifecycle:** ACTIVE → CLAIMING → CLOSED → FINALIZED
 
 **Key records (private state):**
 - `VoteReceipt` - proves participation
 - `RewardTicket` - claim rewards
-- `PollTicket` - poll ownership
+- `PollTicket` - poll ownership (used to issue invites)
+- `PollInvite` - invite to private poll (owner, poll_id, can_vote, expires_block)
 
 **Key mappings (public state):**
 - `polls` - poll metadata
-- `vote_counts` - aggregated results
+- `poll_settings` - privacy mode, visibility, show_results_live
+- `vote_counts` - aggregated results per option
 - `has_voted` - prevents double voting
+- `private_polls` - tracks which polls are invite-only
+- `invite_counts` - tracks invites per poll
 
 ## Reference Projects
 
@@ -106,3 +114,11 @@ This project has specialized Claude agents in `.claude/agents/`:
 - `aleo-docs-helper` - Aleo/Leo documentation assistance
 - `frontend-integration` - Frontend-to-Aleo integration
 - `test-generator` - Test case generation
+
+## Custom Skills (Slash Commands)
+
+Available skills in `.claude/commands/`:
+- `/docs:sync-claude-md` - Update CLAUDE.md to reflect current codebase state
+- `/agent-os:shape-spec` - Gather context and structure planning for significant work
+- `/agent-os:discover-standards` - Find and document coding standards
+- `/agent-os:plan-product` - Product planning assistance
