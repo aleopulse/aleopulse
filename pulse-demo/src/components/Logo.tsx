@@ -5,8 +5,14 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { theme } from "../config/theme";
+import { chain } from "../config/chain";
 
-export const Logo: React.FC = () => {
+interface LogoProps {
+  showBadge?: boolean;
+}
+
+export const Logo: React.FC<LogoProps> = ({ showBadge = true }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
@@ -38,12 +44,16 @@ export const Logo: React.FC = () => {
     config: { damping: 12, stiffness: 200 },
   });
 
+  const gradient = theme.logo.gradient
+    ? `linear-gradient(135deg, ${theme.logo.gradient[0]} 0%, ${theme.logo.gradient[1]} 100%)`
+    : theme.colors.primary;
+
   return (
     <AbsoluteFill
       style={{
         justifyContent: "center",
         alignItems: "center",
-        background: "linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)",
+        background: `linear-gradient(135deg, ${theme.colors.background} 0%, #1a1a2e 100%)`,
       }}
     >
       <div
@@ -56,68 +66,70 @@ export const Logo: React.FC = () => {
           transform: `scale(${scale})`,
         }}
       >
-        {/* Live badge */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "8px 20px",
-            borderRadius: 20,
-            backgroundColor: "rgba(99, 102, 241, 0.1)",
-            border: "1px solid rgba(99, 102, 241, 0.3)",
-            opacity: badgeOpacity,
-            transform: `scale(${badgeScale})`,
-          }}
-        >
+        {/* Network badge */}
+        {showBadge && (
           <div
             style={{
-              width: 8,
-              height: 8,
-              borderRadius: "50%",
-              backgroundColor: "#22c55e",
-              boxShadow: "0 0 10px #22c55e",
-            }}
-          />
-          <span
-            style={{
-              fontSize: 16,
-              color: "#a1a1aa",
-              fontFamily: "system-ui, sans-serif",
-              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "8px 20px",
+              borderRadius: 20,
+              backgroundColor: `${chain.primaryColor}15`,
+              border: `1px solid ${chain.primaryColor}40`,
+              opacity: badgeOpacity,
+              transform: `scale(${badgeScale})`,
             }}
           >
-            Live on Aleo Testnet
-          </span>
-        </div>
+            <div
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: "50%",
+                backgroundColor: "#22c55e",
+                boxShadow: "0 0 10px #22c55e",
+              }}
+            />
+            <span
+              style={{
+                fontSize: 16,
+                color: theme.colors.muted,
+                fontFamily: theme.fonts.body,
+                fontWeight: 500,
+              }}
+            >
+              Live on {chain.displayName} {chain.networkName}
+            </span>
+          </div>
+        )}
 
         {/* Logo */}
         <div
           style={{
             fontSize: 140,
             fontWeight: 800,
-            background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #a855f7 100%)",
+            background: gradient,
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
-            fontFamily: "system-ui, sans-serif",
+            fontFamily: theme.fonts.heading,
             letterSpacing: -4,
           }}
         >
-          LeoPulse
+          {theme.logo.text}
         </div>
 
         {/* Tagline */}
         <div
           style={{
             fontSize: 36,
-            color: "#a1a1aa",
-            fontFamily: "system-ui, sans-serif",
+            color: theme.colors.muted,
+            fontFamily: theme.fonts.body,
             letterSpacing: 2,
             opacity: taglineOpacity,
             transform: `translateY(${taglineY}px)`,
           }}
         >
-          Privacy-Preserving Polls on Aleo
+          {theme.tagline}
         </div>
       </div>
     </AbsoluteFill>

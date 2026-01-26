@@ -1,0 +1,5 @@
+# Audio files
+
+Generated voiceover files will be placed here.
+
+Run `npm run generate:voiceover` to generate audio from your script.

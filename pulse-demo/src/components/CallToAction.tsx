@@ -5,15 +5,18 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { theme } from "../config/theme";
 
 interface CallToActionProps {
   text: string;
-  url?: string;
+  buttonText?: string;
+  subtitle?: string;
 }
 
 export const CallToAction: React.FC<CallToActionProps> = ({
   text,
-  url = "aleopulse.onrender.com",
+  buttonText = "Get Started",
+  subtitle = "Try it free",
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -49,7 +52,7 @@ export const CallToAction: React.FC<CallToActionProps> = ({
   return (
     <AbsoluteFill
       style={{
-        background: "linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%)",
+        background: `linear-gradient(135deg, ${theme.colors.background} 0%, #1a1a2e 100%)`,
         justifyContent: "center",
         alignItems: "center",
       }}
@@ -66,8 +69,8 @@ export const CallToAction: React.FC<CallToActionProps> = ({
           style={{
             fontSize: 56,
             fontWeight: 600,
-            color: "#fafafa",
-            fontFamily: "system-ui, sans-serif",
+            color: theme.colors.text,
+            fontFamily: theme.fonts.heading,
             textAlign: "center",
             opacity: textOpacity,
             maxWidth: 1000,
@@ -80,16 +83,16 @@ export const CallToAction: React.FC<CallToActionProps> = ({
           style={{
             transform: `scale(${buttonScale})`,
             padding: "28px 72px",
-            background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+            background: `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.secondary} 100%)`,
             borderRadius: 20,
             fontSize: 36,
             fontWeight: 700,
             color: "white",
-            fontFamily: "system-ui, sans-serif",
-            boxShadow: `0 0 ${60 * glowIntensity}px rgba(139, 92, 246, ${0.5 * glowIntensity})`,
+            fontFamily: theme.fonts.heading,
+            boxShadow: `0 0 ${60 * glowIntensity}px ${theme.colors.secondary}80`,
           }}
         >
-          Get Started
+          {buttonText}
         </div>
 
         <div
@@ -105,21 +108,21 @@ export const CallToAction: React.FC<CallToActionProps> = ({
           <div
             style={{
               fontSize: 40,
-              color: "#8b5cf6",
-              fontFamily: "system-ui, sans-serif",
+              color: theme.colors.secondary,
+              fontFamily: theme.fonts.body,
               fontWeight: 600,
             }}
           >
-            {url}
+            {theme.url}
           </div>
           <div
             style={{
               fontSize: 20,
-              color: "#71717a",
-              fontFamily: "system-ui, sans-serif",
+              color: theme.colors.muted,
+              fontFamily: theme.fonts.body,
             }}
           >
-            Try it free on testnet
+            {subtitle}
           </div>
         </div>
       </div>

@@ -1,9 +1,6 @@
 import { Composition } from "remotion";
 import { DemoVideo } from "./DemoVideo";
-
-// Total duration: 60 seconds at 30fps (synced with voiceover)
-const DURATION_SECONDS = 60;
-const FPS = 30;
+import { TOTAL_DURATION, FPS } from "./config/timings";
 
 export const RemotionRoot: React.FC = () => {
   return (
@@ -11,7 +8,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="DemoVideo"
         component={DemoVideo}
-        durationInFrames={DURATION_SECONDS * FPS}
+        durationInFrames={TOTAL_DURATION * FPS}
         fps={FPS}
         width={1920}
         height={1080}

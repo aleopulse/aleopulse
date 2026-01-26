@@ -1,0 +1,36 @@
+{
+  "name": "pulse-demo",
+  "version": "1.0.0",
+  "description": "Poll/voting demo video",
+  "scripts": {
+    "dev": "remotion studio",
+    "build": "remotion bundle",
+    "render": "remotion render DemoVideo out/demo.mp4",
+    "render:gif": "remotion render DemoVideo out/demo.gif --image-format=png",
+    "thumbnail": "remotion still DemoVideo out/thumbnail.png --frame=0",
+    "upgrade": "remotion upgrade",
+    "lint": "eslint src && tsc",
+    "generate:voiceover": "npx tsx scripts/generate-voiceover.ts",
+    "capture:screenshots": "npx tsx scripts/capture-screenshots.ts"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.32.0",
+    "@remotion/cli": "^4.0.0",
+    "dotenv": "^17.2.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.0"
+  },
+  "devDependencies": {
+    "@remotion/eslint-config-flat": "^4.0.0",
+    "@types/react": "^19.0.0",
+    "@types/web": "^0.0.166",
+    "eslint": "^9.0.0",
+    "playwright": "^1.50.0",
+    "prettier": "^3.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.0"
+  },
+  "private": true
+}

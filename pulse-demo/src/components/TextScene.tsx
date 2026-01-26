@@ -5,19 +5,18 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { theme } from "../config/theme";
 
 interface TextSceneProps {
   title?: string;
   text: string;
-  backgroundColor?: string;
-  textColor?: string;
+  titleGradient?: boolean;
 }
 
 export const TextScene: React.FC<TextSceneProps> = ({
   title,
   text,
-  backgroundColor = "#0a0a0a",
-  textColor = "#fafafa",
+  titleGradient = true,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -40,7 +39,7 @@ export const TextScene: React.FC<TextSceneProps> = ({
     extrapolateRight: "clamp",
   });
 
-  // Gradient background
+  // Animated gradient background
   const gradientPosition = interpolate(frame, [0, fps * 3], [0, 100], {
     extrapolateRight: "clamp",
   });
@@ -48,7 +47,7 @@ export const TextScene: React.FC<TextSceneProps> = ({
   return (
     <AbsoluteFill
       style={{
-        background: `linear-gradient(${135 + gradientPosition * 0.5}deg, ${backgroundColor} 0%, #1a1a2e ${gradientPosition}%, ${backgroundColor} 100%)`,
+        background: `linear-gradient(${135 + gradientPosition * 0.5}deg, ${theme.colors.background} 0%, #1a1a2e ${gradientPosition}%, ${theme.colors.background} 100%)`,
         justifyContent: "center",
         alignItems: "center",
         padding: 100,
@@ -68,10 +67,12 @@ export const TextScene: React.FC<TextSceneProps> = ({
             style={{
               fontSize: 72,
               fontWeight: 700,
-              background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+              background: titleGradient
+                ? `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.secondary} 100%)`
+                : theme.colors.text,
               WebkitBackgroundClip: "text",
               WebkitTextFillColor: "transparent",
-              fontFamily: "system-ui, sans-serif",
+              fontFamily: theme.fonts.heading,
               opacity: titleOpacity,
               transform: `scale(${titleScale})`,
               textAlign: "center",
@@ -83,8 +84,8 @@ export const TextScene: React.FC<TextSceneProps> = ({
         <div
           style={{
             fontSize: 44,
-            color: textColor,
-            fontFamily: "system-ui, sans-serif",
+            color: theme.colors.text,
+            fontFamily: theme.fonts.body,
             lineHeight: 1.6,
             textAlign: "center",
             opacity: textOpacity,
