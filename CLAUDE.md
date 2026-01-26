@@ -122,3 +122,9 @@ Available skills in `.claude/commands/`:
 - `/agent-os:shape-spec` - Gather context and structure planning for significant work
 - `/agent-os:discover-standards` - Find and document coding standards
 - `/agent-os:plan-product` - Product planning assistance
+- `/remotion:demo-video` - Create demo videos with ElevenLabs voiceover and NanoBanana graphics
+
+## Installed Skills
+
+External skills in `.claude/skills/`:
+- `remotion-best-practices` - Remotion video creation patterns (animations, audio, transitions, etc.)

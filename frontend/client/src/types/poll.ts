@@ -80,6 +80,20 @@ export interface PollInvite {
   expires_block: number;
 }
 
+// Type for poll settings (from poll_settings mapping)
+export interface PollSettings {
+  privacy_mode: number;      // 0=Anonymous, 1=Semi-Private, 2=Identified
+  show_results_live: boolean;
+  require_receipt: boolean;
+  visibility: number;        // 0=Public, 1=Private (invite-only)
+}
+
+// Type for poll ticket record (creator's ownership proof)
+export interface PollTicket {
+  owner: string;
+  poll_id: number;
+}
+
 // Input for creating a new poll
 export interface CreatePollInput {
   title: string;

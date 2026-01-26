@@ -6,3 +6,5 @@ export {
   type PollFormInitialValues,
   type PollCreationFormProps,
 } from "./PollCreationForm";
+
+export { InviteManager } from "./InviteManager";

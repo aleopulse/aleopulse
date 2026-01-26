@@ -162,15 +162,120 @@ const inviteToPoll = async (
 
 ### Task 10: Add invite management UI
 
-Create new components:
-- `InviteParticipantDialog` - form to invite by address
-- `MyInvitesPanel` - list user's received invites
-- `PollInviteList` - creator's view of issued invites
+**File:** `client/src/components/poll/InviteManager.tsx`
+
+Create InviteManager component with:
+- Address input with Aleo address validation (`/^aleo1[a-z0-9]{58}$/`)
+- Expiration selector with presets (1,000 / 5,000 / 10,000 / 50,000 / 100,000 blocks) + custom
+- "Can Vote" checkbox (default: true, uncheck for view-only access)
+- Send Invite button with transaction feedback
+- Collapsible list of sent invites with status (Active/Pending/Expired)
+- Local storage persistence for invite tracking (`poll-invites-{pollId}`)
+
+**Integration in ManagePoll.tsx:**
+- Conditionally render InviteManager when `pollSettings?.visibility === POLL_VISIBILITY.PRIVATE`
+- Positioned after Voters List section
+
+### Task 11: Add PollSettings and PollTicket types
+
+**File:** `client/src/types/poll.ts`
+
+```typescript
+export interface PollSettings {
+  privacy_mode: number;      // 0=Anonymous, 1=Semi-Private, 2=Identified
+  show_results_live: boolean;
+  require_receipt: boolean;
+  visibility: number;        // 0=Public, 1=Private (invite-only)
+}
+
+export interface PollTicket {
+  owner: string;
+  poll_id: number;
+}
+```
+
+### Task 12: Add contract read functions
+
+**File:** `client/src/hooks/useContract.ts`
+
+```typescript
+// Fetch and parse poll_settings mapping
+const getPollSettings = async (pollId: number): Promise<PollSettings | null>
+
+// Fetch user's PollInvite records from wallet
+const getUserPollInvites = async (): Promise<PollInvite[]>
+
+// Fetch user's PollTicket records (for creators)
+const getPollTickets = async (): Promise<PollTicket[]>
+```
+
+### Task 13: Dashboard filtering for private polls
+
+**File:** `client/src/pages/Dashboard.tsx`
+
+Filtering logic:
+1. Fetch poll settings for all polls to get visibility
+2. Fetch user's PollInvite records if connected
+3. For each poll:
+   - If `visibility === PUBLIC (0)` → show
+   - If `visibility === PRIVATE (1)`:
+     - If user is creator → show
+     - If user has valid (non-expired) PollInvite → show
+     - Otherwise → hide
+
+Helper functions:
+- `hasValidInvite(pollId)` - check invite exists and not expired
+- `isPollPrivate(pollId)` - check visibility setting
+- `canAccessPoll(poll)` - combine logic
+
+### Task 14: PollCard visual indicators
+
+**File:** `client/src/components/PollCard.tsx`
+
+Add props:
+```typescript
+isPrivate?: boolean;  // Whether poll is invite-only
+hasInvite?: boolean;  // Whether user has valid invite
+```
+
+Visual indicators:
+- Private + no invite: Yellow Lock icon + "Private" badge
+- Private + has invite: Green Mail icon + "Invited" badge
+- Public: No indicator
 
 ## Verification
 
+### Contract Verification
 1. Create private poll, verify `private_polls[poll_id] = true`
-2. Confirm private poll doesn't appear in public dashboard
-3. Issue invite, verify PollInvite record created
-4. Invited user can see and vote on poll
-5. Vote_private creates VoteReceipt correctly
+2. Issue invite, verify PollInvite record created for invitee
+3. Vote_private creates VoteReceipt correctly
+
+### Frontend Verification
+1. **Dashboard Filtering:**
+   - Create a private poll → verify creator sees it in their dashboard
+   - As non-invited user → verify poll NOT visible in participant dashboard
+   - Invite a user → verify poll now appears in their dashboard
+   - After invite expires → verify poll hidden again
+
+2. **Invite Management:**
+   - Navigate to ManagePoll for a private poll → verify InviteManager visible
+   - Enter valid Aleo address → verify Send Invite button enabled
+   - Enter invalid address → verify validation error
+   - Send invite → verify transaction toast and invite added to list
+   - Check invite status → verify Active/Expired badge correct
+
+3. **Visual Indicators:**
+   - Private poll without invite → verify Lock icon + "Private" badge
+   - Private poll with invite → verify Mail icon + "Invited" badge
+   - Public poll → verify no privacy indicator
+
+### E2E Test Scenarios
+```typescript
+// private-polls.spec.ts
+test('private poll hidden from non-invited users')
+test('private poll visible to creator')
+test('InviteManager shown for private polls')
+test('InviteManager hidden for public polls')
+test('PollCard shows Private badge for invite-only polls')
+test('PollCard shows Invited badge when user has valid invite')
+```
