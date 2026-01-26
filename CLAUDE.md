@@ -21,6 +21,8 @@ frontend/             # Full-stack web application
   server/             # Express backend
   db/                 # Drizzle ORM schema
 
+videos/               # Remotion video project (demo videos, voiceovers)
+
 docs/                 # Project documentation
 ```
 
@@ -59,6 +61,11 @@ cd frontend && npm run db:push
 cd contracts/aleo/poll && leo run <function> <args>
 cd contracts/aleo/poll && leo build
 
+# Unit tests (Vitest)
+cd frontend && npm run test           # Run unit tests
+cd frontend && npm run test:watch     # Watch mode
+cd frontend && npm run test:coverage  # With coverage
+
 # E2E tests (uses Brave with Leo Wallet)
 cd frontend && npm run test:e2e        # Run all tests
 cd frontend && npm run test:e2e:ui     # Interactive UI mode
@@ -75,6 +82,7 @@ Tests use Playwright with Brave browser and the "playwright" profile (Profile 22
 - `navigation.spec.ts` - Route navigation tests
 - `wallet.spec.ts` - Wallet connection tests
 - `poll.spec.ts` - Poll and questionnaire tests
+- `private-polls.spec.ts` - Private poll and invite tests
 
 **Important:** Tests run with `headless: false` since browser extensions require a visible window.
 
@@ -107,22 +115,11 @@ Tests use Playwright with Brave browser and the "playwright" profile (Profile 22
 - `/Users/east/workspace/leo/zk-auction-example`
 - `/Users/east/workspace/leo/aleo-voting-app`
 
-## Custom Agents
-
-This project has specialized Claude agents in `.claude/agents/`:
-- `leo-contract-reviewer` - Security audits for Leo contracts
-- `aleo-docs-helper` - Aleo/Leo documentation assistance
-- `frontend-integration` - Frontend-to-Aleo integration
-- `test-generator` - Test case generation
-
 ## Custom Skills (Slash Commands)
 
 Available skills in `.claude/commands/`:
 - `/docs:sync-claude-md` - Update CLAUDE.md to reflect current codebase state
-- `/agent-os:shape-spec` - Gather context and structure planning for significant work
-- `/agent-os:discover-standards` - Find and document coding standards
-- `/agent-os:plan-product` - Product planning assistance
-- `/remotion:demo-video` - Create demo videos with ElevenLabs voiceover and NanoBanana graphics
+- `/remotion:demo-video` - Create demo videos with ElevenLabs voiceover
 
 ## Installed Skills
 

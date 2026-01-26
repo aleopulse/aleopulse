@@ -2,7 +2,7 @@
 
 A decentralized polling and rewards platform built on Movement Network. Create polls, vote, and earn rewards in MOVE, PULSE, or USDC tokens.
 
-**Live Demo:** [mvpulse.onrender.com](https://mvpulse.onrender.com)
+**Live Demo:** [aleopulse.onrender.com](https://aleopulse.onrender.com)
 
 ## Documentation
 
