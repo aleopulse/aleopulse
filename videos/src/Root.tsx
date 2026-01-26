@@ -1,8 +1,8 @@
 import { Composition } from "remotion";
 import { DemoVideo } from "./DemoVideo";
 
-// Total duration: 60 seconds at 30fps (synced with voiceover)
-const DURATION_SECONDS = 60;
+// Total duration: 45 seconds at 30fps (synced with voiceover transcript)
+const DURATION_SECONDS = 45;
 const FPS = 30;
 
 export const RemotionRoot: React.FC = () => {

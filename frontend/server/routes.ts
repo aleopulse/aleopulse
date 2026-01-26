@@ -26,6 +26,7 @@ import {
   projectQuestionnaires,
   projectInsights,
   faucetClaims,
+  userPreferences,
   TIERS,
   TIER_VOTE_LIMITS,
   TIER_PULSE_THRESHOLDS,
@@ -41,6 +42,7 @@ import {
   QUESTIONNAIRE_REWARD_TYPE,
   PROJECT_STATUS,
   PROJECT_ROLE,
+  PROFILE_TYPES,
   type UserProfile,
   type Season,
   type Quest,
@@ -52,6 +54,8 @@ import {
   type ProjectPoll,
   type ProjectQuestionnaire,
   type ProjectInsight,
+  type UserPreferences,
+  type ProfileType,
 } from "@shared/schema";
 
 // ============================================
@@ -3874,6 +3878,290 @@ To enable AI insights, configure the OpenAI API key in your environment.`;
     } catch (error) {
       console.error("Error recording faucet claim:", error);
       res.status(500).json({ success: false, error: "Failed to record faucet claim" });
+    }
+  });
+
+  // ============================================
+  // User Preferences & Onboarding Routes
+  // ============================================
+
+  /**
+   * GET /api/user/preferences/:address
+   * Get user preferences by wallet address
+   */
+  app.get("/api/user/preferences/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      const [existing] = await db
+        .select()
+        .from(userPreferences)
+        .where(eq(userPreferences.walletAddress, normalizedAddress))
+        .limit(1);
+
+      if (!existing) {
+        // Return default preferences for new users
+        return res.json({
+          success: true,
+          data: {
+            walletAddress: normalizedAddress,
+            onboardingCompleted: false,
+            primaryProfile: null,
+            activeProfile: null,
+            enabledProfiles: [],
+            theme: "dark",
+            compactMode: false,
+          },
+        });
+      }
+
+      res.json({
+        success: true,
+        data: existing,
+      });
+    } catch (error) {
+      console.error("Error fetching user preferences:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch preferences" });
+    }
+  });
+
+  /**
+   * PUT /api/user/preferences/:address
+   * Update user preferences
+   */
+  app.put("/api/user/preferences/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+      const updates = req.body;
+
+      // Check if record exists
+      const [existing] = await db
+        .select()
+        .from(userPreferences)
+        .where(eq(userPreferences.walletAddress, normalizedAddress))
+        .limit(1);
+
+      let result;
+      if (existing) {
+        // Update existing record
+        [result] = await db
+          .update(userPreferences)
+          .set({
+            ...updates,
+            updatedAt: new Date(),
+          })
+          .where(eq(userPreferences.walletAddress, normalizedAddress))
+          .returning();
+      } else {
+        // Create new record
+        [result] = await db
+          .insert(userPreferences)
+          .values({
+            walletAddress: normalizedAddress,
+            ...updates,
+          })
+          .returning();
+      }
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error updating user preferences:", error);
+      res.status(500).json({ success: false, error: "Failed to update preferences" });
+    }
+  });
+
+  /**
+   * POST /api/user/onboarding/complete
+   * Complete onboarding with profile selections
+   */
+  app.post("/api/user/onboarding/complete", async (req, res) => {
+    try {
+      const {
+        walletAddress,
+        primaryProfile,
+        enabledProfiles,
+        daoSettings,
+        researchSettings,
+        hrSettings,
+        communitySettings,
+        earnerSettings,
+        developerSettings,
+      } = req.body;
+
+      if (!walletAddress || !primaryProfile) {
+        return res.status(400).json({
+          success: false,
+          error: "walletAddress and primaryProfile are required",
+        });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+
+      // Check if record exists
+      const [existing] = await db
+        .select()
+        .from(userPreferences)
+        .where(eq(userPreferences.walletAddress, normalizedAddress))
+        .limit(1);
+
+      const profileSettings = {
+        daoSettings: daoSettings || null,
+        researchSettings: researchSettings || null,
+        hrSettings: hrSettings || null,
+        communitySettings: communitySettings || null,
+        earnerSettings: earnerSettings || null,
+        developerSettings: developerSettings || null,
+      };
+
+      let result;
+      if (existing) {
+        [result] = await db
+          .update(userPreferences)
+          .set({
+            onboardingCompleted: true,
+            onboardingCompletedAt: new Date(),
+            primaryProfile,
+            activeProfile: primaryProfile,
+            enabledProfiles: enabledProfiles || [primaryProfile],
+            ...profileSettings,
+            updatedAt: new Date(),
+          })
+          .where(eq(userPreferences.walletAddress, normalizedAddress))
+          .returning();
+      } else {
+        [result] = await db
+          .insert(userPreferences)
+          .values({
+            walletAddress: normalizedAddress,
+            onboardingCompleted: true,
+            onboardingCompletedAt: new Date(),
+            primaryProfile,
+            activeProfile: primaryProfile,
+            enabledProfiles: enabledProfiles || [primaryProfile],
+            ...profileSettings,
+          })
+          .returning();
+      }
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+      res.status(500).json({ success: false, error: "Failed to complete onboarding" });
+    }
+  });
+
+  /**
+   * POST /api/user/switch-profile
+   * Switch active profile
+   */
+  app.post("/api/user/switch-profile", async (req, res) => {
+    try {
+      const { walletAddress, profile } = req.body;
+
+      if (!walletAddress || !profile) {
+        return res.status(400).json({
+          success: false,
+          error: "walletAddress and profile are required",
+        });
+      }
+
+      const normalizedAddress = walletAddress.toLowerCase();
+
+      // Validate profile is a valid ProfileType
+      const validProfiles = Object.values(PROFILE_TYPES);
+      if (!validProfiles.includes(profile as ProfileType)) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid profile type",
+        });
+      }
+
+      // Get existing preferences
+      const [existing] = await db
+        .select()
+        .from(userPreferences)
+        .where(eq(userPreferences.walletAddress, normalizedAddress))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).json({
+          success: false,
+          error: "User preferences not found. Complete onboarding first.",
+        });
+      }
+
+      // Verify profile is in enabled profiles
+      const enabledProfiles = existing.enabledProfiles || [];
+      if (!enabledProfiles.includes(profile as ProfileType)) {
+        return res.status(400).json({
+          success: false,
+          error: "Profile is not enabled for this user",
+        });
+      }
+
+      // Update active profile
+      const [result] = await db
+        .update(userPreferences)
+        .set({
+          activeProfile: profile,
+          updatedAt: new Date(),
+        })
+        .where(eq(userPreferences.walletAddress, normalizedAddress))
+        .returning();
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error switching profile:", error);
+      res.status(500).json({ success: false, error: "Failed to switch profile" });
+    }
+  });
+
+  /**
+   * GET /api/user/onboarding/status/:address
+   * Check onboarding status
+   */
+  app.get("/api/user/onboarding/status/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const normalizedAddress = address.toLowerCase();
+
+      const [existing] = await db
+        .select()
+        .from(userPreferences)
+        .where(eq(userPreferences.walletAddress, normalizedAddress))
+        .limit(1);
+
+      // Check if user has any activity to determine if they're existing or new
+      const [voteActivity] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(dailyVoteLogs)
+        .where(eq(dailyVoteLogs.walletAddress, normalizedAddress));
+
+      const hasVoteActivity = (voteActivity?.count || 0) > 0;
+
+      res.json({
+        success: true,
+        data: {
+          onboardingCompleted: existing?.onboardingCompleted || false,
+          onboardingCompletedAt: existing?.onboardingCompletedAt || null,
+          hasExistingActivity: hasVoteActivity,
+          suggestedProfile: hasVoteActivity ? PROFILE_TYPES.SURVEY_EARNER : null,
+        },
+      });
+    } catch (error) {
+      console.error("Error checking onboarding status:", error);
+      res.status(500).json({ success: false, error: "Failed to check onboarding status" });
     }
   });
 

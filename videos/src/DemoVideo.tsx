@@ -7,16 +7,16 @@ import { ClaimingPhase } from "./components/ClaimingPhase";
 import { ClaimRewards } from "./components/ClaimRewards";
 import { Finalize } from "./components/Finalize";
 
-// Scene timings (in seconds) - synced with voiceover audio
-// Poll lifecycle: Create → Fund → Vote → Claiming → Claim Rewards → Finalize
+// Scene timings (in seconds) - synced with voiceover transcript timestamps
+// Poll lifecycle: Intro → Create → Fund → Vote → Claiming → Claim Rewards → Finalize
 const TIMINGS = {
-  intro: { start: 0, duration: 5 },
-  createPoll: { start: 5, duration: 10 },
-  fundPoll: { start: 15, duration: 10 },
-  submitResponse: { start: 25, duration: 10 },
-  claimingPhase: { start: 35, duration: 10 },
-  claimRewards: { start: 45, duration: 7 },
-  finalize: { start: 52, duration: 8 },
+  intro: { start: 0, duration: 4 },           // [0.00s - 4.00s]
+  createPoll: { start: 4, duration: 7 },      // [4.00s - 11.00s]
+  fundPoll: { start: 11, duration: 9 },       // [11.00s - 20.00s]
+  submitResponse: { start: 20, duration: 7 }, // [20.00s - 27.00s]
+  claimingPhase: { start: 27, duration: 7 },  // [27.00s - 34.00s]
+  claimRewards: { start: 34, duration: 3 },   // [34.00s - 37.00s]
+  finalize: { start: 37, duration: 8 },       // [37.00s - 45.00s]
 };
 
 export const DemoVideo: React.FC = () => {
