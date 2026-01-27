@@ -94,6 +94,59 @@ export interface PollTicket {
   poll_id: number;
 }
 
+// ============================================
+// DONATION TYPES
+// ============================================
+
+// Donation privacy modes (must match contract and schema)
+export const DONATION_PRIVACY = {
+  PUBLIC: 0,        // Donor identity and amount visible
+  ANONYMOUS: 1,     // Fully anonymous, only aggregate visible
+  SEMI_ANONYMOUS: 2, // Anonymous by default, can reveal later
+} as const;
+
+export const DONATION_PRIVACY_NAMES = {
+  [DONATION_PRIVACY.PUBLIC]: "Public",
+  [DONATION_PRIVACY.ANONYMOUS]: "Anonymous",
+  [DONATION_PRIVACY.SEMI_ANONYMOUS]: "Semi-Anonymous",
+} as const;
+
+export type DonationPrivacyMode = typeof DONATION_PRIVACY[keyof typeof DONATION_PRIVACY];
+
+// Donation receipt (from Leo contract DonationReceipt record)
+export interface DonationReceipt {
+  owner: string;
+  poll_id: number;
+  amount: number;        // In octas
+  privacy_mode: DonationPrivacyMode;
+  donated_at: number;    // Block height
+  commitment_hash: string;
+}
+
+// Public donation info (from Leo contract PublicDonation struct)
+export interface PublicDonation {
+  donor: string;
+  poll_id: number;
+  amount: number;        // In octas (net amount after fee)
+  donated_at: number;    // Block height
+}
+
+// Input for making a donation
+export interface DonationInput {
+  pollId: number;
+  amount: number;        // In octas (gross amount before fee)
+  privacyMode: DonationPrivacyMode;
+}
+
+// Donation stats for a poll
+export interface PollDonationStats {
+  totalAmount: number;      // Total donations in octas
+  totalCount: number;       // Total number of donations
+  publicDonations: PublicDonation[];  // List of public donations
+  publicCount: number;      // Number of public donations
+  anonymousCount: number;   // Number of anonymous donations (derived)
+}
+
 // Input for creating a new poll
 export interface CreatePollInput {
   title: string;

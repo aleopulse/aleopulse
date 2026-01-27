@@ -57,6 +57,49 @@ export const SEASON_STATUS = {
   DISTRIBUTED: 3,
 } as const;
 
+// ============================================
+// Donation Privacy Constants
+// ============================================
+
+export const DONATION_PRIVACY = {
+  PUBLIC: 0,        // Donor identity and amount visible
+  ANONYMOUS: 1,     // Fully anonymous, only aggregate visible
+  SEMI_ANONYMOUS: 2, // Anonymous by default, can reveal later
+} as const;
+
+export const DONATION_PRIVACY_NAMES = {
+  [DONATION_PRIVACY.PUBLIC]: "Public",
+  [DONATION_PRIVACY.ANONYMOUS]: "Anonymous",
+  [DONATION_PRIVACY.SEMI_ANONYMOUS]: "Semi-Anonymous",
+} as const;
+
+// ============================================
+// Donations
+// ============================================
+
+export const donations = pgTable("donations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  pollId: integer("poll_id").notNull(),
+  walletAddress: varchar("wallet_address", { length: 66 }), // null for anonymous
+  amount: varchar("amount", { length: 50 }).notNull(), // Gross amount (in octas)
+  netAmount: varchar("net_amount", { length: 50 }).notNull(), // Net after fees
+  coinTypeId: integer("coin_type_id").default(1).notNull(), // 0=MOVE, 1=PULSE, 2=USDC
+  privacyMode: integer("privacy_mode").default(0).notNull(), // 0=public, 1=anonymous, 2=semi-anonymous
+  commitmentHash: varchar("commitment_hash", { length: 100 }), // For anonymous/semi-anonymous donations
+  isRevealed: boolean("is_revealed").default(false).notNull(), // For semi-anonymous that chose to reveal
+  txHash: varchar("tx_hash", { length: 66 }),
+  network: varchar("network", { length: 20 }).default("testnet").notNull(),
+  donatedAt: timestamp("donated_at").defaultNow().notNull(),
+  revealedAt: timestamp("revealed_at"),
+});
+
+export type Donation = typeof donations.$inferSelect;
+export type InsertDonation = typeof donations.$inferInsert;
+
+// ============================================
+// Users
+// ============================================
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),

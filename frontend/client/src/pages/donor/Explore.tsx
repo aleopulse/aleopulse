@@ -4,17 +4,8 @@ import { DonorLayout } from "@/components/layouts/DonorLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -29,16 +20,18 @@ import {
   Users,
   Clock,
   Coins,
-  Loader2,
   Search,
   Filter,
 } from "lucide-react";
 import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
+import { useDonations } from "@/hooks/useDonations";
 import { useNetwork } from "@/contexts/NetworkContext";
-import type { PollWithMeta } from "@/types/poll";
-import { COIN_TYPES, getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
+import type { PollWithMeta, DonationPrivacyMode } from "@/types/poll";
+import { DONATION_PRIVACY } from "@/types/poll";
+import { getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
 import { showTransactionSuccessToast, showTransactionErrorToast } from "@/lib/transaction-feedback";
+import { DonationDialog } from "@/components/poll/DonationDialog";
 
 // Local storage key for tracking user's fundings
 const FUNDING_HISTORY_KEY = "mvpulse_funding_history";
@@ -47,6 +40,7 @@ interface FundingRecord {
   pollId: number;
   amount: number;
   coinTypeId: number;
+  privacyMode: number;
   timestamp: number;
   txHash: string;
 }
@@ -65,7 +59,8 @@ function saveFundingRecord(address: string, record: FundingRecord) {
 
 export default function DonorExplore() {
   const { isConnected, address } = useWalletConnection();
-  const { getAllPolls, fundPoll, contractAddress } = useContract();
+  const { getAllPolls, contractAddress } = useContract();
+  const { donate, loading: isDonating } = useDonations();
   const { config } = useNetwork();
 
   const [polls, setPolls] = useState<PollWithMeta[]>([]);
@@ -75,8 +70,6 @@ export default function DonorExplore() {
 
   // Funding dialog state
   const [fundingPoll, setFundingPoll] = useState<PollWithMeta | null>(null);
-  const [fundAmount, setFundAmount] = useState("");
-  const [isFunding, setIsFunding] = useState(false);
 
   // Fetch polls
   const fetchPolls = useCallback(async () => {
@@ -123,46 +116,47 @@ export default function DonorExplore() {
     return result;
   }, [polls, searchTerm, sortBy]);
 
-  // Handle funding
-  const handleFund = async () => {
-    if (!fundingPoll || !fundAmount || !address) return;
+  // Handle funding with privacy mode
+  const handleFund = async (amount: number, privacyMode: DonationPrivacyMode) => {
+    if (!fundingPoll || !address) return;
 
-    const amountOctas = Math.floor(parseFloat(fundAmount) * 1e8);
-    if (isNaN(amountOctas) || amountOctas <= 0) {
-      showTransactionErrorToast("Invalid amount", "Please enter a valid amount");
-      return;
-    }
-
-    setIsFunding(true);
     try {
       const coinTypeId = fundingPoll.coin_type_id as CoinTypeId;
-      const result = await fundPoll(fundingPoll.id, amountOctas, coinTypeId);
+      const result = await donate({
+        pollId: fundingPoll.id,
+        amount,
+        privacyMode,
+      });
 
       // Save to local storage
       saveFundingRecord(address, {
         pollId: fundingPoll.id,
-        amount: amountOctas,
+        amount,
         coinTypeId,
+        privacyMode,
         timestamp: Date.now(),
         txHash: result.hash,
       });
 
+      const privacyLabel = privacyMode === DONATION_PRIVACY.PUBLIC
+        ? "publicly"
+        : privacyMode === DONATION_PRIVACY.ANONYMOUS
+        ? "anonymously"
+        : "semi-anonymously";
+
       showTransactionSuccessToast(
         result.hash,
         "Poll Funded!",
-        `You contributed ${fundAmount} ${getCoinSymbol(coinTypeId)} to this poll.`,
+        `You contributed ${(amount / 1e8).toFixed(4)} ${getCoinSymbol(coinTypeId)} ${privacyLabel} to this poll.`,
         config.explorerUrl,
-        result.sponsored
+        false
       );
 
       setFundingPoll(null);
-      setFundAmount("");
       fetchPolls(); // Refresh to show updated pool
     } catch (error) {
       console.error("Failed to fund poll:", error);
       showTransactionErrorToast("Failed to fund poll", error instanceof Error ? error : "Transaction failed");
-    } finally {
-      setIsFunding(false);
     }
   };
 
@@ -297,75 +291,20 @@ export default function DonorExplore() {
         </div>
       )}
 
-      {/* Funding Dialog */}
-      <Dialog open={!!fundingPoll} onOpenChange={(open) => !open && setFundingPoll(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Fund Poll</DialogTitle>
-            <DialogDescription>
-              {fundingPoll && (
-                <>
-                  Contribute to "{fundingPoll.title}" reward pool. Your contribution will be distributed to voters.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {fundingPoll && (
-            <div className="space-y-4">
-              <div className="p-4 rounded-lg bg-muted/50">
-                <div className="flex items-center justify-between text-sm mb-2">
-                  <span className="text-muted-foreground">Current Reward Pool</span>
-                  <span className="font-mono font-semibold">
-                    {(fundingPoll.reward_pool / 1e8).toFixed(4)} {getCoinSymbol(fundingPoll.coin_type_id as CoinTypeId)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">Current Voters</span>
-                  <span className="font-mono">{fundingPoll.totalVotes}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="fundAmount">
-                  Amount ({getCoinSymbol(fundingPoll.coin_type_id as CoinTypeId)})
-                </Label>
-                <Input
-                  id="fundAmount"
-                  type="number"
-                  placeholder="0.00"
-                  value={fundAmount}
-                  onChange={(e) => setFundAmount(e.target.value)}
-                  min="0"
-                  step="0.01"
-                />
-                <p className="text-xs text-muted-foreground">
-                  A 2% platform fee will be applied to your contribution.
-                </p>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setFundingPoll(null)} disabled={isFunding}>
-              Cancel
-            </Button>
-            <Button onClick={handleFund} disabled={isFunding || !fundAmount}>
-              {isFunding ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Funding...
-                </>
-              ) : (
-                <>
-                  <Heart className="w-4 h-4 mr-2" />
-                  Fund Poll
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Donation Dialog with Privacy Options */}
+      {fundingPoll && (
+        <DonationDialog
+          open={!!fundingPoll}
+          onOpenChange={(open) => !open && setFundingPoll(null)}
+          pollId={fundingPoll.id}
+          pollTitle={fundingPoll.title}
+          currentRewardPool={fundingPoll.reward_pool}
+          totalVoters={fundingPoll.totalVotes}
+          coinTypeId={fundingPoll.coin_type_id as CoinTypeId}
+          onDonate={handleFund}
+          isLoading={isDonating}
+        />
+      )}
     </DonorLayout>
   );
 }
