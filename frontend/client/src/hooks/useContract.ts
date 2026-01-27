@@ -710,14 +710,17 @@ export function useContract() {
   }, [getPollCount, getPoll]);
 
   // Check if user has voted
+  // NOTE: The contract uses `has_voted` mapping with BHP256 hash key which is hard to compute client-side.
+  // This RPC query is unreliable. Prefer using useHasVoted hook from useVoteStatus.ts which uses indexer events.
   const hasVoted = useCallback(
     async (pollId: number, voterAddress?: string): Promise<boolean> => {
       const addr = voterAddress || activeAddress;
       if (!addr) return false;
 
-      // Query the voters mapping with combined key
+      // Query the has_voted mapping - note: key should be BHP256 hash but we approximate
+      // This may return false negatives; indexer-based approach is more reliable
       const key = `${pollId}u64_${addr}`;
-      const value = await indexer.getMappingValue(contractAddress, "voters", key);
+      const value = await indexer.getMappingValue(contractAddress, "has_voted", key);
       return value === "true";
     },
     [indexer, contractAddress, activeAddress]
