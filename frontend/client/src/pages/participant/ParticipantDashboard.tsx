@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import {
   Vote,
   Clock,
@@ -16,7 +17,11 @@ import {
   ArrowUpRight,
   Gift,
   Loader2,
+  Sparkles,
 } from "lucide-react";
+import { TierBadge } from "@/components/TierBadge";
+import { TierProgressBar } from "@/components/TierProgressBar";
+import { TIER_VOTE_LIMITS, TIERS } from "@shared/schema";
 import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import { usePolls } from "@/hooks/usePolls";
@@ -42,6 +47,35 @@ export default function ParticipantDashboard() {
   const [rpcClaimedPollIds, setRpcClaimedPollIds] = useState<Set<number>>(new Set());
   const [isRpcStatusLoading, setIsRpcStatusLoading] = useState(false);
   const [claimingPollId, setClaimingPollId] = useState<number | null>(null);
+  const [isBulkClaiming, setIsBulkClaiming] = useState(false);
+  const [bulkClaimProgress, setBulkClaimProgress] = useState({ current: 0, total: 0 });
+
+  // Mock tier data - in production, fetch from contract or user profile
+  // TODO: Integrate with actual tier system when available
+  const userTier = TIERS.BRONZE;
+  const dailyVoteLimit = TIER_VOTE_LIMITS[userTier as keyof typeof TIER_VOTE_LIMITS] || 3;
+  const votesToday = 0; // TODO: Track actual votes today
+  const userPulseBalance = BigInt(0); // TODO: Fetch from wallet/contract
+  const nextTierXp = BigInt(100 * 1e8); // Example threshold
+
+  // Calculate time until daily vote reset (midnight UTC)
+  const getResetCountdown = () => {
+    const now = new Date();
+    const midnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+    const diff = midnight.getTime() - now.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${minutes}m`;
+  };
+  const [resetCountdown, setResetCountdown] = useState(getResetCountdown());
+
+  // Update countdown every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setResetCountdown(getResetCountdown());
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Sorted polls
   const polls = useMemo(() => {
@@ -177,6 +211,51 @@ export default function ParticipantDashboard() {
     }
   };
 
+  // Handle bulk claim all rewards
+  const handleBulkClaim = async () => {
+    if (claimablePolls.length === 0) return;
+
+    setIsBulkClaiming(true);
+    setBulkClaimProgress({ current: 0, total: claimablePolls.length });
+
+    const successfulClaims: number[] = [];
+    const failedClaims: number[] = [];
+
+    for (let i = 0; i < claimablePolls.length; i++) {
+      const poll = claimablePolls[i];
+      setBulkClaimProgress({ current: i + 1, total: claimablePolls.length });
+
+      try {
+        await claimReward(poll.id, poll.coin_type_id as CoinTypeId);
+        successfulClaims.push(poll.id);
+        setRpcClaimedPollIds((prev: Set<number>) => new Set(prev).add(poll.id));
+      } catch (error) {
+        console.error(`Failed to claim poll ${poll.id}:`, error);
+        failedClaims.push(poll.id);
+      }
+    }
+
+    setIsBulkClaiming(false);
+    setBulkClaimProgress({ current: 0, total: 0 });
+
+    if (successfulClaims.length > 0) {
+      showTransactionSuccessToast(
+        "",
+        `Claimed ${successfulClaims.length} Rewards!`,
+        failedClaims.length > 0
+          ? `${failedClaims.length} claims failed. You can try them individually.`
+          : "All rewards have been transferred to your wallet.",
+        config.explorerUrl,
+        false
+      );
+    } else if (failedClaims.length > 0) {
+      showTransactionErrorToast(
+        "Bulk claim failed",
+        "Could not claim any rewards. Please try again."
+      );
+    }
+  };
+
   // Render poll card
   const renderPollCard = (poll: PollWithMeta, hasVoted: boolean = false) => {
     const rewardPool = poll.reward_pool / 1e8;
@@ -231,6 +310,36 @@ export default function ParticipantDashboard() {
     <ParticipantLayout title="Participant Dashboard" description="Track your votes and rewards">
       {/* Hidden tour welcome target */}
       <div data-tour="participant-welcome" className="sr-only" />
+
+      {/* Tier Progress Card */}
+      <Card className="mb-6 bg-gradient-to-r from-primary/10 to-accent/10 border-primary/30">
+        <CardContent className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4">
+          <div className="flex items-center gap-4">
+            <TierBadge tier={userTier} size="lg" showTooltip={true} />
+            <div>
+              <p className="text-sm text-muted-foreground">Daily Votes</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xl font-bold font-mono">{votesToday}/{dailyVoteLimit}</p>
+                <Progress
+                  value={(votesToday / dailyVoteLimit) * 100}
+                  className="w-20 h-2"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex-1 max-w-[200px]">
+            <TierProgressBar
+              currentPulse={userPulseBalance}
+              currentTier={userTier}
+              showLabels={true}
+            />
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-muted-foreground">Resets in</p>
+            <p className="font-mono text-lg font-bold">{resetCountdown}</p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Cards */}
       <div data-tour="participant-stats" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -313,11 +422,28 @@ export default function ParticipantDashboard() {
       {/* Claimable Rewards Section */}
       {claimablePolls.length > 0 && (
         <Card data-tour="claimable-rewards" className="mb-8 border-green-500/30 bg-green-500/5">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <Gift className="w-5 h-5 text-green-500" />
               Polls to Claim ({claimablePolls.length})
             </CardTitle>
+            <Button
+              onClick={handleBulkClaim}
+              disabled={isBulkClaiming || claimingPollId !== null}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {isBulkClaiming ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Claiming {bulkClaimProgress.current}/{bulkClaimProgress.total}...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Claim All
+                </>
+              )}
+            </Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">

@@ -167,3 +167,58 @@
 .gradient-text {
   @apply bg-clip-text text-transparent bg-linear-to-r from-primary to-accent;
 }
+
+/*
+  Quest Type Design Tokens
+  Usage: Use CSS variables for quest type styling to maintain consistency
+
+  Example Tailwind usage:
+  - text-[hsl(var(--quest-daily))]
+  - bg-[hsl(var(--quest-daily)/0.1)]
+  - border-[hsl(var(--quest-daily)/0.3)]
+*/
+:root {
+  --quest-daily: 220 100% 50%;      /* Blue - daily quests */
+  --quest-weekly: 280 100% 60%;     /* Purple - weekly quests */
+  --quest-achievement: 50 100% 50%; /* Yellow/Gold - achievements */
+  --quest-special: 320 100% 50%;    /* Pink/Magenta - special events */
+}
+
+.dark {
+  --quest-daily: 220 90% 55%;       /* Slightly brighter in dark mode */
+  --quest-weekly: 280 90% 65%;
+  --quest-achievement: 50 95% 55%;
+  --quest-special: 320 90% 55%;
+}
+
+/*
+  Icon Size Convention Guide
+
+  Standardized icon sizes for consistent UI:
+  - w-3 h-3 (12px): Micro - badge icons, inline indicators, timestamps
+  - w-4 h-4 (16px): Small - buttons, list items, form inputs, compact displays
+  - w-5 h-5 (20px): Medium - navigation, card headers, primary actions
+  - w-6 h-6 (24px): Large - empty states, hero sections, prominent features
+
+  Usage examples:
+  - <Clock className="w-3 h-3" /> // Timestamp indicator
+  - <Plus className="w-4 h-4" />  // Button icon
+  - <Vote className="w-5 h-5" />  // Card header icon
+  - <Inbox className="w-6 h-6" /> // Empty state illustration
+*/
+
+/* Poll Status Colors */
+:root {
+  --poll-active: 142 76% 36%;     /* Green */
+  --poll-claiming: 48 96% 53%;    /* Yellow/Amber */
+  --poll-closed: 215 16% 47%;     /* Slate/Gray */
+  --poll-finalized: 217 91% 60%;  /* Blue */
+}
+
+/* Tier Colors */
+:root {
+  --tier-bronze: 30 100% 35%;     /* Bronze/Amber */
+  --tier-silver: 215 15% 50%;     /* Silver/Slate */
+  --tier-gold: 48 100% 50%;       /* Gold/Yellow */
+  --tier-platinum: 190 90% 50%;   /* Cyan/Platinum */
+}

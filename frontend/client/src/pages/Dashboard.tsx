@@ -5,8 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Filter, Search, RefreshCcw, AlertCircle, Loader2, ExternalLink } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Plus, Filter, Search, RefreshCcw, AlertCircle, Loader2, ExternalLink, LayoutGrid, Activity } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { UnifiedActivityDashboard } from "@/components/UnifiedActivityDashboard";
 import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import { useNetwork } from "@/contexts/NetworkContext";
@@ -17,6 +20,7 @@ import { getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
 import { toast } from "sonner";
 
 const PENDING_POLL_TX_KEY = "pending-poll-tx";
+const DASHBOARD_VIEW_KEY = "leopulse_dashboard_view";
 const NORMAL_REFRESH_INTERVAL = 15000; // 15 seconds
 const AGGRESSIVE_REFRESH_INTERVAL = 5000; // 5 seconds when pending tx
 
@@ -34,6 +38,23 @@ export default function Dashboard() {
   const [pendingTxId, setPendingTxId] = useState<string | null>(null);
   const previousPollCountRef = useRef<number>(0);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Unified view toggle state
+  const [isUnifiedView, setIsUnifiedView] = useState(() => {
+    const stored = localStorage.getItem(DASHBOARD_VIEW_KEY);
+    return stored === "unified";
+  });
+
+  // Save view preference to localStorage
+  const handleViewToggle = (unified: boolean) => {
+    setIsUnifiedView(unified);
+    localStorage.setItem(DASHBOARD_VIEW_KEY, unified ? "unified" : "classic");
+  };
+
+  // Mock voted/claimed/funded poll IDs for unified view (in production, fetch from indexer)
+  const [votedPollIds] = useState<Set<number>>(new Set());
+  const [claimedPollIds] = useState<Set<number>>(new Set());
+  const [fundedPollIds] = useState<Set<number>>(new Set());
 
   // State for poll visibility and user invites
   const [pollSettingsMap, setPollSettingsMap] = useState<Map<number, PollSettings>>(new Map());
@@ -258,24 +279,54 @@ export default function Dashboard() {
               : "Participate in active polls and earn rewards."}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant={role === "creator" ? "default" : "outline"}
-            onClick={() => setRole("creator")}
-            size="sm"
-          >
-            Creator View
-          </Button>
-          <Button
-            variant={role === "participant" ? "default" : "outline"}
-            onClick={() => setRole("participant")}
-            size="sm"
-          >
-            Participant View
-          </Button>
+        <div className="flex items-center gap-4">
+          {/* View Toggle */}
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border/50 bg-muted/30">
+            <LayoutGrid className={`w-4 h-4 ${!isUnifiedView ? "text-primary" : "text-muted-foreground"}`} />
+            <Switch
+              checked={isUnifiedView}
+              onCheckedChange={handleViewToggle}
+              className="data-[state=checked]:bg-primary"
+            />
+            <Activity className={`w-4 h-4 ${isUnifiedView ? "text-primary" : "text-muted-foreground"}`} />
+            <Label className="text-xs text-muted-foreground cursor-pointer" onClick={() => handleViewToggle(!isUnifiedView)}>
+              {isUnifiedView ? "Unified" : "Classic"}
+            </Label>
+          </div>
+
+          {!isUnifiedView && (
+            <div className="flex gap-2">
+              <Button
+                variant={role === "creator" ? "default" : "outline"}
+                onClick={() => setRole("creator")}
+                size="sm"
+              >
+                Creator View
+              </Button>
+              <Button
+                variant={role === "participant" ? "default" : "outline"}
+                onClick={() => setRole("participant")}
+                size="sm"
+              >
+                Participant View
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Unified Activity View */}
+      {isUnifiedView ? (
+        <UnifiedActivityDashboard
+          polls={polls}
+          votedPollIds={votedPollIds}
+          claimedPollIds={claimedPollIds}
+          fundedPollIds={fundedPollIds}
+          userAddress={address ?? undefined}
+          isLoading={isLoading}
+        />
+      ) : (
+        <>
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
@@ -442,6 +493,8 @@ export default function Dashboard() {
           )}
         </TabsContent>
       </Tabs>
+        </>
+      )}
     </div>
   );
 }
