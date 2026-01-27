@@ -2,16 +2,20 @@ import "dotenv/config";
 import { generateVoiceover, listVoices } from "../src/lib/elevenlabs";
 import * as path from "path";
 
-// Demo script - edit this to change the voiceover content
+// Demo script - Poll lifecycle walkthrough
 const DEMO_SCRIPT = {
-  intro: "Introducing LeoPulse - privacy-preserving polls and surveys on Aleo.",
-  problem:
-    "Traditional surveys expose your identity. Your votes, opinions, and responses are never truly private.",
-  solution:
-    "LeoPulse uses zero-knowledge proofs to verify your participation without revealing your identity or your choices.",
-  features:
-    "Create polls with flexible privacy modes. Anonymous voting ensures complete privacy. Semi-private mode reveals participation but hides choices. Identified mode provides full transparency when needed.",
-  cta: "Start creating private polls today. Visit LeoPulse to experience true voting privacy.",
+  intro: "Welcome to LeoPulse - privacy-preserving polls on Aleo.",
+  createPoll:
+    "Start by creating a poll. Choose your privacy mode, set your options, and define participation rules.",
+  fundPoll:
+    "Fund your poll with token rewards to incentivize participation. Set fixed rewards per vote or split a pool among all voters.",
+  submitResponse:
+    "Participants submit their votes privately using zero-knowledge proofs. Their identity and choices remain protected.",
+  claimingPhase:
+    "When voting ends, the poll creator transitions the poll to the claiming phase, allowing participants to collect their rewards.",
+  claimRewards: "Participants claim their earned tokens directly to their wallet.",
+  finalize:
+    "Finally, the creator finalizes the poll, closing it permanently and making results available. Try LeoPulse today.",
 };
 
 async function main() {
@@ -26,7 +30,7 @@ async function main() {
     return;
   }
 
-  const audioDir = path.join(__dirname, "../src/audio");
+  const audioDir = path.join(__dirname, "../public/audio");
 
   console.log("Generating voiceovers...\n");
 
@@ -40,7 +44,7 @@ async function main() {
   const fullScript = Object.values(DEMO_SCRIPT).join(" ");
   await generateVoiceover(fullScript, path.join(audioDir, "full-demo.mp3"));
 
-  console.log("\nDone! Audio files saved to src/audio/");
+  console.log("\nDone! Audio files saved to public/audio/");
 }
 
 main().catch(console.error);

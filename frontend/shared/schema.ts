@@ -687,3 +687,87 @@ export const faucetClaims = pgTable("faucet_claims", {
 
 export type FaucetClaim = typeof faucetClaims.$inferSelect;
 export type InsertFaucetClaim = typeof faucetClaims.$inferInsert;
+
+// ============================================
+// User Preferences & Onboarding
+// ============================================
+
+export const PROFILE_TYPES = {
+  DAO_GOVERNANCE: 'dao_governance',
+  MARKET_RESEARCHER: 'market_researcher',
+  HR_PROFESSIONAL: 'hr_professional',
+  COMMUNITY_BUILDER: 'community_builder',
+  SURVEY_EARNER: 'survey_earner',
+  DEVELOPER: 'developer',
+} as const;
+
+export type ProfileType = typeof PROFILE_TYPES[keyof typeof PROFILE_TYPES];
+
+// Profile-specific settings types
+export interface DaoSettings {
+  defaultVotingPeriod?: number; // hours
+  requireQuorum?: boolean;
+  delegationEnabled?: boolean;
+}
+
+export interface ResearchSettings {
+  preferredPanelSize?: number;
+  qualityThreshold?: number;
+  autoRewardEnabled?: boolean;
+}
+
+export interface HrSettings {
+  anonymityLevel?: 'full' | 'partial' | 'none';
+  departmentTracking?: boolean;
+  complianceMode?: boolean;
+}
+
+export interface CommunitySettings {
+  questsEnabled?: boolean;
+  rewardsEnabled?: boolean;
+  autoDistribute?: boolean;
+}
+
+export interface EarnerSettings {
+  preferredCategories?: string[];
+  notificationsEnabled?: boolean;
+  minimumReward?: number;
+}
+
+export interface DeveloperSettings {
+  apiKeyEnabled?: boolean;
+  webhooksEnabled?: boolean;
+  sandboxMode?: boolean;
+}
+
+export const userPreferences = pgTable("user_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  walletAddress: varchar("wallet_address", { length: 66 }).notNull().unique(),
+
+  // Onboarding
+  onboardingCompleted: boolean("onboarding_completed").default(false).notNull(),
+  onboardingCompletedAt: timestamp("onboarding_completed_at"),
+
+  // Profile config
+  primaryProfile: varchar("primary_profile", { length: 30 }),
+  activeProfile: varchar("active_profile", { length: 30 }),
+  enabledProfiles: jsonb("enabled_profiles").$type<ProfileType[]>().default([]),
+
+  // Profile-specific settings (JSONB)
+  daoSettings: jsonb("dao_settings").$type<DaoSettings>(),
+  researchSettings: jsonb("research_settings").$type<ResearchSettings>(),
+  hrSettings: jsonb("hr_settings").$type<HrSettings>(),
+  communitySettings: jsonb("community_settings").$type<CommunitySettings>(),
+  earnerSettings: jsonb("earner_settings").$type<EarnerSettings>(),
+  developerSettings: jsonb("developer_settings").$type<DeveloperSettings>(),
+
+  // UI preferences
+  theme: varchar("theme", { length: 10 }).default("dark"),
+  compactMode: boolean("compact_mode").default(false),
+
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export type UserPreferences = typeof userPreferences.$inferSelect;
+export type InsertUserPreferences = typeof userPreferences.$inferInsert;

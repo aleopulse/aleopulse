@@ -15,6 +15,8 @@ import {
   ArrowUpRight,
   Compass,
 } from "lucide-react";
+import { DonorImpactCard } from "@/components/DonorImpactCard";
+import { POLL_STATUS } from "@/types/poll";
 import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import type { PollWithMeta } from "@/types/poll";
@@ -108,6 +110,44 @@ export default function DonorDashboard() {
       activeFundedPolls: fundedPolls.filter((p) => p.isActive).length,
     };
   }, [fundingHistory, fundedPollIds, fundedPolls]);
+
+  // Calculate impact metrics for the DonorImpactCard
+  const impactMetrics = useMemo(() => {
+    // Calculate total participants reached across funded polls
+    const participantsReached = fundedPolls.reduce((sum, poll) => sum + poll.totalVotes, 0);
+
+    // Calculate total rewards distributed (estimate based on funding and completion)
+    // For completed polls (CLOSED, FINALIZED), we assume rewards were distributed
+    const completedPolls = fundedPolls.filter(
+      (p) => p.status === POLL_STATUS.CLOSED || p.status === POLL_STATUS.FINALIZED || p.status === POLL_STATUS.CLAIMING
+    );
+    const totalDistributed = completedPolls.reduce((sum, poll) => {
+      const perVoter = poll.reward_per_vote > 0
+        ? poll.reward_per_vote / 1e8
+        : poll.totalVotes > 0
+        ? (poll.reward_pool / 1e8) / poll.totalVotes
+        : 0;
+      return sum + (perVoter * poll.totalVotes);
+    }, 0);
+
+    // Completion rate: polls that reached claiming/closed/finalized status
+    const pollsCompleted = completedPolls.length;
+    const completionRate = fundedPolls.length > 0
+      ? (pollsCompleted / fundedPolls.length) * 100
+      : 0;
+
+    // Get the primary token symbol for display
+    const tokenSymbol = Object.keys(stats.fundedByToken)[0] || "PULSE";
+
+    return {
+      participantsReached,
+      totalDistributed,
+      totalDistributedSymbol: tokenSymbol,
+      completionRate,
+      pollsCompleted,
+      pollsFunded: fundedPolls.length,
+    };
+  }, [fundedPolls, stats.fundedByToken]);
 
   // Render poll card with optional action label
   const renderPollCard = (poll: PollWithMeta, actionLabel?: string) => {
@@ -231,6 +271,13 @@ export default function DonorDashboard() {
           </>
         )}
       </div>
+
+      {/* Impact Metrics Card */}
+      {fundedPolls.length > 0 && (
+        <div className="mb-8">
+          <DonorImpactCard metrics={impactMetrics} isLoading={isLoading} />
+        </div>
+      )}
 
       {/* Your Funded Polls */}
       <div className="mb-8">

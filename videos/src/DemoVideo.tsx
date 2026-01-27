@@ -1,16 +1,22 @@
 import { AbsoluteFill, Audio, Sequence, staticFile, useVideoConfig } from "remotion";
 import { Logo } from "./components/Logo";
-import { TextScene } from "./components/TextScene";
-import { CallToAction } from "./components/CallToAction";
+import { CreatePoll } from "./components/CreatePoll";
+import { FundPoll } from "./components/FundPoll";
+import { SubmitResponse } from "./components/SubmitResponse";
+import { ClaimingPhase } from "./components/ClaimingPhase";
+import { ClaimRewards } from "./components/ClaimRewards";
+import { Finalize } from "./components/Finalize";
 
-// Scene timings (in seconds) - synced with voiceover audio
-// intro: 4.3s, problem: 6.5s, solution: 6.2s, features: 15.2s, cta: 5.1s
+// Scene timings (in seconds) - synced with voiceover transcript timestamps
+// Poll lifecycle: Intro → Create → Fund → Vote → Claiming → Claim Rewards → Finalize
 const TIMINGS = {
-  intro: { start: 0, duration: 5 },
-  problem: { start: 5, duration: 7 },
-  solution: { start: 12, duration: 7 },
-  features: { start: 19, duration: 17 },
-  cta: { start: 36, duration: 9 }, // Extended for CTA to linger
+  intro: { start: 0, duration: 4 },           // [0.00s - 4.00s]
+  createPoll: { start: 4, duration: 7 },      // [4.00s - 11.00s]
+  fundPoll: { start: 11, duration: 9 },       // [11.00s - 20.00s]
+  submitResponse: { start: 20, duration: 7 }, // [20.00s - 27.00s]
+  claimingPhase: { start: 27, duration: 7 },  // [27.00s - 34.00s]
+  claimRewards: { start: 34, duration: 3 },   // [34.00s - 37.00s]
+  finalize: { start: 37, duration: 8 },       // [37.00s - 45.00s]
 };
 
 export const DemoVideo: React.FC = () => {
@@ -31,45 +37,52 @@ export const DemoVideo: React.FC = () => {
         <Logo />
       </Sequence>
 
-      {/* Scene 2: The Problem */}
+      {/* Scene 2: Create Poll */}
       <Sequence
-        from={toFrames(TIMINGS.problem.start)}
-        durationInFrames={toFrames(TIMINGS.problem.duration)}
+        from={toFrames(TIMINGS.createPoll.start)}
+        durationInFrames={toFrames(TIMINGS.createPoll.duration)}
       >
-        <TextScene
-          title="The Problem"
-          text="Traditional surveys expose your identity. Your votes, opinions, and responses are never truly private."
-        />
+        <CreatePoll />
       </Sequence>
 
-      {/* Scene 3: The Solution */}
+      {/* Scene 3: Fund Poll */}
       <Sequence
-        from={toFrames(TIMINGS.solution.start)}
-        durationInFrames={toFrames(TIMINGS.solution.duration)}
+        from={toFrames(TIMINGS.fundPoll.start)}
+        durationInFrames={toFrames(TIMINGS.fundPoll.duration)}
       >
-        <TextScene
-          title="The Solution"
-          text="LeoPulse uses zero-knowledge proofs to verify your participation without revealing your identity or your choices."
-        />
+        <FundPoll />
       </Sequence>
 
-      {/* Scene 4: Features */}
+      {/* Scene 4: Submit Response (Vote) */}
       <Sequence
-        from={toFrames(TIMINGS.features.start)}
-        durationInFrames={toFrames(TIMINGS.features.duration)}
+        from={toFrames(TIMINGS.submitResponse.start)}
+        durationInFrames={toFrames(TIMINGS.submitResponse.duration)}
       >
-        <TextScene
-          title="Flexible Privacy Modes"
-          text="Anonymous voting for complete privacy. Semi-private mode reveals participation but hides choices. Identified mode provides full transparency when needed."
-        />
+        <SubmitResponse />
       </Sequence>
 
-      {/* Scene 5: Call to Action */}
+      {/* Scene 5: Claiming Phase */}
       <Sequence
-        from={toFrames(TIMINGS.cta.start)}
-        durationInFrames={toFrames(TIMINGS.cta.duration)}
+        from={toFrames(TIMINGS.claimingPhase.start)}
+        durationInFrames={toFrames(TIMINGS.claimingPhase.duration)}
       >
-        <CallToAction text="Start creating private polls today." />
+        <ClaimingPhase />
+      </Sequence>
+
+      {/* Scene 6: Claim Rewards */}
+      <Sequence
+        from={toFrames(TIMINGS.claimRewards.start)}
+        durationInFrames={toFrames(TIMINGS.claimRewards.duration)}
+      >
+        <ClaimRewards />
+      </Sequence>
+
+      {/* Scene 7: Finalize & CTA */}
+      <Sequence
+        from={toFrames(TIMINGS.finalize.start)}
+        durationInFrames={toFrames(TIMINGS.finalize.duration)}
+      >
+        <Finalize />
       </Sequence>
     </AbsoluteFill>
   );

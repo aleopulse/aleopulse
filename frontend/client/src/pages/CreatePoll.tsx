@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Plus, Trash2, Sparkles, ArrowRight, ArrowLeft, Check, Loader2, Wallet, Coins, Info, Calculator, Bot, Shield, Eye, EyeOff, Globe, Lock } from "lucide-react";
+import { Plus, Trash2, Sparkles, ArrowRight, ArrowLeft, Check, Loader2, Wallet, Coins, Info, Calculator, Bot, Shield, Eye, EyeOff, Globe, Lock, FileText } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useContract } from "@/hooks/useContract";
@@ -25,6 +25,42 @@ const DURATION_OPTIONS = {
   "3d": 259200,
   "1w": 604800,
 };
+
+// Poll templates for quick start
+const POLL_TEMPLATES = {
+  custom: {
+    name: "Custom",
+    description: "Start from scratch",
+    options: ["", ""],
+    icon: FileText,
+  },
+  yesNo: {
+    name: "Yes/No",
+    description: "Simple binary choice",
+    options: ["Yes", "No"],
+    icon: Check,
+  },
+  agreeDisagree: {
+    name: "Agree/Disagree",
+    description: "Opinion poll",
+    options: ["Strongly Agree", "Agree", "Neutral", "Disagree", "Strongly Disagree"],
+    icon: FileText,
+  },
+  multipleChoice: {
+    name: "A/B/C/D",
+    description: "Multiple choice",
+    options: ["Option A", "Option B", "Option C", "Option D"],
+    icon: FileText,
+  },
+  rating: {
+    name: "Rating",
+    description: "1-5 scale",
+    options: ["1 - Poor", "2 - Fair", "3 - Good", "4 - Very Good", "5 - Excellent"],
+    icon: Sparkles,
+  },
+} as const;
+
+type TemplateKey = keyof typeof POLL_TEMPLATES;
 
 export type PrivacyMode = typeof PRIVACY_MODE[keyof typeof PRIVACY_MODE];
 export type PollVisibility = typeof POLL_VISIBILITY[keyof typeof POLL_VISIBILITY];
@@ -64,6 +100,7 @@ export default function CreatePoll() {
   const [duration, setDuration] = useState<keyof typeof DURATION_OPTIONS>("24h");
   const [options, setOptions] = useState(["", ""]);
   const [fromAI, setFromAI] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateKey>("custom");
   const [privacyMode, setPrivacyMode] = useState<PrivacyMode>(PRIVACY_MODE.ANONYMOUS);
   const [visibility, setVisibility] = useState<PollVisibility>(POLL_VISIBILITY.PUBLIC);
 
@@ -176,6 +213,13 @@ export default function CreatePoll() {
     const newOptions = [...options];
     newOptions[index] = value;
     setOptions(newOptions);
+  };
+
+  // Handle template selection
+  const handleTemplateSelect = (templateKey: TemplateKey) => {
+    setSelectedTemplate(templateKey);
+    const template = POLL_TEMPLATES[templateKey];
+    setOptions([...template.options]);
   };
 
   const handleNext = () => setStep((prev) => Math.min(prev + 1, 3));
@@ -577,30 +621,78 @@ export default function CreatePoll() {
             <CardHeader>
               <CardTitle>Step 2: Voting Options</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {options.map((option, index) => (
-                <div key={index} className="flex gap-2">
-                  <Input
-                    placeholder={`Option ${index + 1}`}
-                    className="bg-muted/30"
-                    value={option}
-                    onChange={(e) => updateOption(index, e.target.value)}
-                  />
-                  {options.length > 2 && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeOption(index)}
-                      className="text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
+            <CardContent className="space-y-6">
+              {/* Template Selector */}
+              <div className="space-y-3">
+                <Label>Quick Templates</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                  {(Object.entries(POLL_TEMPLATES) as [TemplateKey, typeof POLL_TEMPLATES[TemplateKey]][]).map(([key, template]) => {
+                    const Icon = template.icon;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => handleTemplateSelect(key)}
+                        className={cn(
+                          "flex flex-col items-center gap-1 p-3 rounded-lg border transition-all text-center",
+                          selectedTemplate === key
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border hover:bg-muted/50"
+                        )}
+                      >
+                        <Icon className="w-4 h-4" />
+                        <span className="text-xs font-medium">{template.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
-              <Button variant="outline" onClick={addOption} className="w-full border-dashed">
-                <Plus className="w-4 h-4 mr-2" /> Add Option
-              </Button>
+                {selectedTemplate !== "custom" && (
+                  <p className="text-xs text-muted-foreground">
+                    Template applied. You can customize the options below.
+                  </p>
+                )}
+              </div>
+
+              {/* Options */}
+              <div className="space-y-3">
+                <Label>Options</Label>
+                {options.map((option, index) => (
+                  <div key={index} className="flex gap-2">
+                    <Input
+                      placeholder={`Option ${index + 1}`}
+                      className="bg-muted/30"
+                      value={option}
+                      onChange={(e) => {
+                        updateOption(index, e.target.value);
+                        setSelectedTemplate("custom"); // Switch to custom if user edits
+                      }}
+                    />
+                    {options.length > 2 && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          removeOption(index);
+                          setSelectedTemplate("custom");
+                        }}
+                        className="text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    addOption();
+                    setSelectedTemplate("custom");
+                  }}
+                  className="w-full border-dashed"
+                >
+                  <Plus className="w-4 h-4 mr-2" /> Add Option
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}

@@ -1,4 +1,10 @@
-import { AbsoluteFill, interpolate, useCurrentFrame } from "remotion";
+import {
+  AbsoluteFill,
+  interpolate,
+  spring,
+  useCurrentFrame,
+  useVideoConfig,
+} from "remotion";
 
 interface TextSceneProps {
   title?: string;
@@ -14,23 +20,35 @@ export const TextScene: React.FC<TextSceneProps> = ({
   textColor = "#fafafa",
 }) => {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
 
-  const titleOpacity = interpolate(frame, [0, 20], [0, 1], {
+  const titleScale = spring({
+    frame,
+    fps,
+    config: { damping: 15, stiffness: 100 },
+  });
+
+  const titleOpacity = interpolate(frame, [0, fps * 0.5], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  const textOpacity = interpolate(frame, [15, 35], [0, 1], {
+  const textOpacity = interpolate(frame, [fps * 0.3, fps * 0.8], [0, 1], {
     extrapolateRight: "clamp",
   });
 
-  const textY = interpolate(frame, [15, 35], [20, 0], {
+  const textY = interpolate(frame, [fps * 0.3, fps * 0.8], [30, 0], {
+    extrapolateRight: "clamp",
+  });
+
+  // Gradient background
+  const gradientPosition = interpolate(frame, [0, fps * 3], [0, 100], {
     extrapolateRight: "clamp",
   });
 
   return (
     <AbsoluteFill
       style={{
-        backgroundColor,
+        background: `linear-gradient(${135 + gradientPosition * 0.5}deg, ${backgroundColor} 0%, #1a1a2e ${gradientPosition}%, ${backgroundColor} 100%)`,
         justifyContent: "center",
         alignItems: "center",
         padding: 100,
@@ -41,18 +59,21 @@ export const TextScene: React.FC<TextSceneProps> = ({
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 40,
+          gap: 48,
           maxWidth: 1400,
         }}
       >
         {title && (
           <div
             style={{
-              fontSize: 64,
+              fontSize: 72,
               fontWeight: 700,
-              color: "#8b5cf6",
+              background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
               fontFamily: "system-ui, sans-serif",
               opacity: titleOpacity,
+              transform: `scale(${titleScale})`,
               textAlign: "center",
             }}
           >
@@ -61,10 +82,10 @@ export const TextScene: React.FC<TextSceneProps> = ({
         )}
         <div
           style={{
-            fontSize: 42,
+            fontSize: 44,
             color: textColor,
             fontFamily: "system-ui, sans-serif",
-            lineHeight: 1.5,
+            lineHeight: 1.6,
             textAlign: "center",
             opacity: textOpacity,
             transform: `translateY(${textY}px)`,

@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { LayoutDashboard, FolderKanban, PlusCircle, Settings, Home, UserCircle, Vote, ArrowLeftRight, Wallet, Heart, ChevronUp, Menu } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { NetworkSwitcher } from "./NetworkSwitcher";
+import { ProfileSwitcher } from "./ProfileSwitcher";
 import { WalletButton } from "./WalletButton";
 import { Button } from "./ui/button";
 import {
@@ -150,6 +151,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
             {/* Network and theme hidden on mobile - accessible via Settings page */}
             <div className="hidden md:block">
               <NetworkSwitcher />
+            </div>
+            <div className="hidden md:block">
+              <ProfileSwitcher />
             </div>
             <div className="hidden md:block">
               <ThemeToggle />

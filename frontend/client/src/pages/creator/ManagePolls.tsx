@@ -21,7 +21,10 @@ import {
   CheckCircle2,
   Flag,
   Clock,
+  Play,
+  StopCircle,
 } from "lucide-react";
+import { PollLifecycleStepper } from "@/components/PollLifecycleStepper";
 import { getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
 import {
   DropdownMenu,
@@ -383,6 +386,50 @@ export default function ManagePolls() {
                       </div>
 
                       <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+                        {/* Primary inline actions based on status */}
+                        {poll.status === POLL_STATUS.ACTIVE && (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setClosePollModal({ open: true, pollId: poll.id });
+                            }}
+                            disabled={isActionLoading}
+                            className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                          >
+                            {actionLoading?.type === "startClaims" && actionLoading.pollId === poll.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Play className="w-4 h-4 mr-1" />
+                                Start Claims
+                              </>
+                            )}
+                          </Button>
+                        )}
+
+                        {poll.status === POLL_STATUS.CLAIMING && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              handleClosePoll(poll.id);
+                            }}
+                            disabled={isActionLoading}
+                          >
+                            {actionLoading?.type === "close" && actionLoading.pollId === poll.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <StopCircle className="w-4 h-4 mr-1" />
+                                Close Poll
+                              </>
+                            )}
+                          </Button>
+                        )}
+
                         <Button
                           variant="ghost"
                           size="sm"
@@ -394,8 +441,8 @@ export default function ManagePolls() {
                           <ExternalLink className="w-4 h-4" />
                         </Button>
 
-                        {/* Hide dropdown for FINALIZED polls - no actions available */}
-                        {poll.status !== POLL_STATUS.FINALIZED && (
+                        {/* Secondary actions in dropdown (only show if there are secondary actions) */}
+                        {poll.status !== POLL_STATUS.FINALIZED && poll.status !== POLL_STATUS.ACTIVE && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button
@@ -404,7 +451,7 @@ export default function ManagePolls() {
                                 disabled={isActionLoading}
                                 onClick={(e) => e.preventDefault()}
                               >
-                                {isActionLoading ? (
+                                {isActionLoading && !["startClaims", "close"].includes(actionLoading?.type || "") ? (
                                   <Loader2 className="w-4 h-4 animate-spin" />
                                 ) : (
                                   <MoreHorizontal className="w-4 h-4" />
@@ -412,14 +459,6 @@ export default function ManagePolls() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              {/* ACTIVE polls: Start Claims */}
-                              {poll.status === POLL_STATUS.ACTIVE && (
-                                <DropdownMenuItem
-                                  onClick={() => setClosePollModal({ open: true, pollId: poll.id })}
-                                >
-                                  <XCircle className="w-4 h-4 mr-2" /> Start Claims
-                                </DropdownMenuItem>
-                              )}
                               {/* CLAIMING polls: Distribute Rewards (MANUAL_PUSH mode) */}
                               {poll.status === POLL_STATUS.CLAIMING &&
                                 poll.distribution_mode === DISTRIBUTION_MODE.MANUAL_PUSH &&
@@ -428,12 +467,6 @@ export default function ManagePolls() {
                                     <Send className="w-4 h-4 mr-2" /> Distribute Rewards
                                   </DropdownMenuItem>
                                 )}
-                              {/* CLAIMING polls: Close Poll (stop claims/distributions) */}
-                              {poll.status === POLL_STATUS.CLAIMING && (
-                                <DropdownMenuItem onClick={() => handleClosePoll(poll.id)}>
-                                  <XCircle className="w-4 h-4 mr-2" /> Close Poll
-                                </DropdownMenuItem>
-                              )}
                               {/* CLOSED polls: Withdraw Remaining (during grace period) */}
                               {poll.status === POLL_STATUS.CLOSED && poll.reward_pool > 0 && (
                                 <DropdownMenuItem onClick={() => handleWithdraw(poll.id, poll.coin_type_id as CoinTypeId)}>
