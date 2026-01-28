@@ -39,7 +39,7 @@ import { getAllBalances, type AllBalances, parseToSmallestUnit } from "@/lib/bal
 import { COIN_TYPES, getCoinDecimals, type CoinTypeId } from "@/lib/tokens";
 import { WalletSelectionModal } from "@/components/WalletSelectionModal";
 import { useAleoWallet } from "@/hooks/useAleoWallet";
-import { claimPulseFaucet, getAleoFaucetUrl } from "@/lib/faucet";
+import { getAleoFaucetUrl } from "@/lib/faucet";
 import { formatRelativeTime } from "@/lib/events";
 import { useStaking } from "@/hooks/useStaking";
 import { Progress } from "@/components/ui/progress";
@@ -169,7 +169,7 @@ export default function WalletPage() {
     window.open(getAleoFaucetUrl(), "_blank");
   };
 
-  // Handle PULSE faucet with rate limiting
+  // Handle PULSE faucet with backend-initiated minting
   const handlePulseFaucet = async () => {
     if (!address) return;
 
@@ -186,38 +186,42 @@ export default function WalletPage() {
 
     setIsClaimingPulse(true);
     try {
-      const result = await claimPulseFaucet(executeTransaction, config.pulseProgramId);
+      // Call the backend to mint tokens directly
+      const response = await fetch("/api/faucet/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ network, wallet: address }),
+      });
 
-      if (!result.success) {
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        // Handle rate limiting
+        if (response.status === 429) {
+          setFaucetCanClaim(false);
+          if (result.nextClaimTime) {
+            setFaucetNextClaimTime(result.nextClaimTime);
+          }
+          throw new Error(result.error || "Rate limit exceeded");
+        }
         throw new Error(result.error || "Faucet claim failed");
       }
 
-      // Record the claim in the backend
-      try {
-        await fetch("/api/faucet/record", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ network, wallet: address, txHash: result.txId }),
-        });
-        // Update local state
-        setFaucetCanClaim(false);
-        setFaucetNextClaimTime(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
-      } catch (recordError) {
-        console.error("Failed to record faucet claim:", recordError);
-        // Don't fail the whole operation if recording fails
-      }
+      // Update local state
+      setFaucetCanClaim(false);
+      setFaucetNextClaimTime(result.data.nextClaimTime);
 
       toast.success("PULSE claimed successfully!", {
-        description: "You received PULSE from the faucet",
-        action: {
+        description: `You received ${result.data.amount} PULSE from the faucet`,
+        action: result.data.txId ? {
           label: "View",
-          onClick: () => window.open(`${config.explorerUrl}/transaction/${result.txId}`, "_blank"),
-        },
+          onClick: () => window.open(`${config.explorerUrl}/transaction/${result.data.txId}`, "_blank"),
+        } : undefined,
       });
 
-      // Refresh balance after claiming
-      setTimeout(fetchBalance, 2000);
+      // Refresh balance after claiming (give time for on-chain confirmation)
+      setTimeout(fetchBalance, 5000);
     } catch (error) {
       console.error("PULSE faucet failed:", error);
       toast.error("Failed to claim PULSE", {

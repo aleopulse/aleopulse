@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { eq, and, desc, sql, gte } from "drizzle-orm";
 // Shinami and Aptos SDK removed - not applicable for Aleo
 import { db } from "./db";
+import { mintPulseToRecipient, verifyFaucetConfig } from "./aleo-service";
 import {
   userProfiles,
   seasons,
@@ -3810,9 +3811,127 @@ To enable AI insights, configure the OpenAI API key in your environment.`;
   });
 
   /**
+   * POST /api/faucet/claim
+   * Claim PULSE tokens from the faucet (backend-initiated minting)
+   * Body: { network, wallet }
+   *
+   * This endpoint:
+   * 1. Checks rate limiting (24-hour per IP)
+   * 2. Records the claim in the database
+   * 3. Mints PULSE tokens to the wallet via token_registry.aleo
+   */
+  app.post("/api/faucet/claim", async (req, res) => {
+    try {
+      const { network, wallet } = req.body;
+
+      if (!network || !wallet) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required parameters: network and wallet"
+        });
+      }
+
+      // Validate wallet address format
+      if (!wallet.startsWith("aleo1") || wallet.length !== 63) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid Aleo wallet address"
+        });
+      }
+
+      // Faucet is only available on testnet
+      if (network !== "testnet") {
+        return res.status(403).json({
+          success: false,
+          error: "Faucet is only available on testnet"
+        });
+      }
+
+      // Verify faucet minting is configured
+      const faucetConfig = verifyFaucetConfig();
+      if (!faucetConfig.configured) {
+        console.error("Faucet not configured:", faucetConfig.error);
+        return res.status(503).json({
+          success: false,
+          error: "Faucet is temporarily unavailable. Please try again later."
+        });
+      }
+
+      // Get client IP (handle proxies)
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()
+        || req.socket.remoteAddress
+        || "unknown";
+
+      // Check rate limit (24 hours per IP)
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const [existingClaim] = await db
+        .select()
+        .from(faucetClaims)
+        .where(
+          and(
+            eq(faucetClaims.ipAddress, ip),
+            eq(faucetClaims.network, network),
+            gte(faucetClaims.claimedAt, twentyFourHoursAgo)
+          )
+        )
+        .limit(1);
+
+      if (existingClaim) {
+        const nextClaimTime = new Date(existingClaim.claimedAt.getTime() + 24 * 60 * 60 * 1000);
+        return res.status(429).json({
+          success: false,
+          error: "Rate limit exceeded. You can only claim once every 24 hours.",
+          nextClaimTime: nextClaimTime.toISOString(),
+        });
+      }
+
+      // Get PULSE token ID from environment
+      const pulseTokenId = process.env.VITE_PULSE_TOKEN_ID || "1field";
+
+      // Mint PULSE tokens to the wallet
+      console.log(`[faucet] Initiating mint for ${wallet}`);
+      const mintResult = await mintPulseToRecipient(wallet, pulseTokenId);
+
+      if (!mintResult.success) {
+        console.error(`[faucet] Mint failed for ${wallet}:`, mintResult.error);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to mint tokens. Please try again later.",
+          details: mintResult.error,
+        });
+      }
+
+      // Record the successful claim
+      await db.insert(faucetClaims).values({
+        ipAddress: ip,
+        walletAddress: wallet,
+        network,
+        txHash: mintResult.txId || null,
+      });
+
+      console.log(`[faucet] Successfully minted PULSE to ${wallet}, tx: ${mintResult.txId}`);
+
+      res.json({
+        success: true,
+        data: {
+          minted: true,
+          amount: "1000", // 1000 PULSE
+          txId: mintResult.txId,
+          nextClaimTime: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error("Error processing faucet claim:", error);
+      res.status(500).json({ success: false, error: "Failed to process faucet claim" });
+    }
+  });
+
+  /**
    * POST /api/faucet/record
-   * Record a successful faucet claim
+   * Record a successful faucet claim (legacy endpoint for backward compatibility)
    * Body: { network, wallet, txHash }
+   * @deprecated Use POST /api/faucet/claim instead
    */
   app.post("/api/faucet/record", async (req, res) => {
     try {
