@@ -14,9 +14,12 @@ import {
   AlertCircle,
   ArrowUpRight,
   Compass,
+  Eye,
+  EyeOff,
+  ShieldCheck,
 } from "lucide-react";
 import { DonorImpactCard } from "@/components/DonorImpactCard";
-import { POLL_STATUS } from "@/types/poll";
+import { POLL_STATUS, DONATION_PRIVACY } from "@/types/poll";
 import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import type { PollWithMeta } from "@/types/poll";
@@ -29,6 +32,7 @@ interface FundingRecord {
   pollId: number;
   amount: number;
   coinTypeId: number;
+  privacyMode?: number;  // 0=public, 1=anonymous, 2=semi-anonymous
   timestamp: number;
   txHash: string;
 }
@@ -93,14 +97,28 @@ export default function DonorDashboard() {
     return polls.filter((p) => p.isActive);
   }, [polls]);
 
-  // Calculate stats - group by token type (exclude MOVE, only show PULSE and USDC)
+  // Calculate stats - group by token type and privacy mode
   const stats = useMemo(() => {
     const fundedByToken: Record<string, number> = {};
+    let publicCount = 0;
+    let anonymousCount = 0;
+    let semiAnonymousCount = 0;
+
     fundingHistory.forEach((f) => {
       // Skip MOVE (coin_type_id = 0), only aggregate PULSE and USDC
       if (f.coinTypeId === COIN_TYPES.MOVE) return;
       const coinSymbol = getCoinSymbol(f.coinTypeId as CoinTypeId);
       fundedByToken[coinSymbol] = (fundedByToken[coinSymbol] || 0) + (f.amount / 1e8);
+
+      // Count by privacy mode
+      const privacyMode = f.privacyMode ?? DONATION_PRIVACY.PUBLIC;
+      if (privacyMode === DONATION_PRIVACY.PUBLIC) {
+        publicCount++;
+      } else if (privacyMode === DONATION_PRIVACY.ANONYMOUS) {
+        anonymousCount++;
+      } else if (privacyMode === DONATION_PRIVACY.SEMI_ANONYMOUS) {
+        semiAnonymousCount++;
+      }
     });
 
     return {
@@ -108,6 +126,9 @@ export default function DonorDashboard() {
       pollsFunded: fundedPollIds.size,
       fundedByToken,
       activeFundedPolls: fundedPolls.filter((p) => p.isActive).length,
+      publicCount,
+      anonymousCount,
+      semiAnonymousCount,
     };
   }, [fundingHistory, fundedPollIds, fundedPolls]);
 
@@ -271,6 +292,56 @@ export default function DonorDashboard() {
           </>
         )}
       </div>
+
+      {/* Privacy Breakdown */}
+      {stats.totalFundings > 0 && (
+        <div className="mb-8">
+          <h2 className="text-lg font-semibold mb-3">Donation Privacy Breakdown</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
+                    <Eye className="w-5 h-5 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold font-mono">{stats.publicCount}</p>
+                    <p className="text-xs text-muted-foreground">Public Donations</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-purple-500/10 flex items-center justify-center">
+                    <EyeOff className="w-5 h-5 text-purple-500" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold font-mono">{stats.anonymousCount}</p>
+                    <p className="text-xs text-muted-foreground">Anonymous Donations</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-card/50 backdrop-blur-sm border-border/50">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <ShieldCheck className="w-5 h-5 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold font-mono">{stats.semiAnonymousCount}</p>
+                    <p className="text-xs text-muted-foreground">Semi-Anonymous</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
 
       {/* Impact Metrics Card */}
       {fundedPolls.length > 0 && (

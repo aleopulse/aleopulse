@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
 import { useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { getProfileConfig, type ProfileType } from "@/types/user-preferences";
 
 export function ProfileSwitcher() {
   const { connected } = useWallet();
+  const [, setLocation] = useLocation();
   const {
     activeProfile,
     activeProfileConfig,
@@ -47,10 +48,10 @@ export function ProfileSwitcher() {
     setIsSwitching(true);
     try {
       await switchProfile(profile);
-      // Navigate to the new dashboard
+      // Navigate to the new dashboard (client-side to preserve wallet connection)
       const config = getProfileConfig(profile);
       if (config) {
-        window.location.href = config.dashboardPath;
+        setLocation(config.dashboardPath);
       }
     } catch (error) {
       console.error("Failed to switch profile:", error);

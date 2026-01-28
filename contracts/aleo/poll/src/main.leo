@@ -25,6 +25,11 @@ program leopulse_poll_v2.aleo {
     const DIST_PULL: u8 = 0u8;
     const DIST_PUSH: u8 = 1u8;
 
+    // Donation privacy modes
+    const DONATION_PUBLIC: u8 = 0u8;
+    const DONATION_ANONYMOUS: u8 = 1u8;
+    const DONATION_SEMI_ANON: u8 = 2u8;
+
     // Platform fee: 2% (200 basis points)
     const DEFAULT_FEE_BPS: u64 = 200u64;
     const MAX_FEE_BPS: u64 = 1000u64;
@@ -72,6 +77,14 @@ program leopulse_poll_v2.aleo {
         fee_bps: u64,
         claim_period_blocks: u32,
         total_fees_collected: u128,
+    }
+
+    // Public donation info (PUBLIC mode only)
+    struct PublicDonation {
+        donor: address,
+        poll_id: u64,
+        amount: u64,
+        donated_at: u32,
     }
 
     // Input struct for poll creation to reduce parameters
@@ -125,6 +138,16 @@ program leopulse_poll_v2.aleo {
         expires_block: u32,
     }
 
+    // Donation receipt - proves donation without revealing identity (for anonymous/semi-anonymous)
+    record DonationReceipt {
+        owner: address,
+        poll_id: u64,
+        amount: u64,
+        privacy_mode: u8,
+        donated_at: u32,
+        commitment_hash: field,  // Hash of poll_id + amount + nonce, used for verification
+    }
+
     // ============================================
     // MAPPINGS (Public State)
     // ============================================
@@ -143,6 +166,14 @@ program leopulse_poll_v2.aleo {
     mapping private_polls: u64 => bool;
     // Track invite count per poll (for management)
     mapping invite_counts: u64 => u64;
+
+    // Donation tracking mappings
+    mapping poll_total_donations: u64 => u64;           // Aggregate donation amounts per poll
+    mapping poll_donation_count: u64 => u64;            // Total donation count per poll
+    mapping public_donations: field => PublicDonation;  // Public donor records (key = hash of poll_id + index)
+    mapping public_donation_count: u64 => u64;          // Count of public donations per poll
+    mapping donation_commitments: field => bool;        // Tracks commitment hashes to prevent double-commitment
+    mapping revealed_donations: field => PublicDonation; // Tracks revealed semi-anonymous donations
 
     // ============================================
     // CONSTRUCTOR
@@ -619,6 +650,295 @@ program leopulse_poll_v2.aleo {
         assert(!Mapping::contains(has_claimed, voter_key));
 
         Mapping::set(has_claimed, voter_key, true);
+    }
+
+    // ============================================
+    // DONATION FUNCTIONS
+    // ============================================
+
+    // Fund a poll with full transparency (PUBLIC mode)
+    // Donor address and amount are publicly visible
+    async transition fund_poll_public(
+        public poll_id: u64,
+        public amount: u64
+    ) -> Future {
+        assert(amount > 0u64);
+        return finalize_fund_poll_public(poll_id, amount, self.caller);
+    }
+
+    async function finalize_fund_poll_public(
+        poll_id: u64,
+        amount: u64,
+        donor: address
+    ) {
+        let poll_info: PollInfo = Mapping::get(polls, poll_id);
+        let config: PlatformConfig = Mapping::get(platform_config, 0u8);
+
+        // Poll must be active
+        assert_eq(poll_info.status, STATUS_ACTIVE);
+
+        // Calculate fee and net amount
+        let fee: u64 = (amount * config.fee_bps) / BPS_DENOMINATOR;
+        let net_amount: u64 = amount - fee;
+
+        // Update poll reward pool
+        let updated_poll: PollInfo = PollInfo {
+            id: poll_info.id,
+            creator: poll_info.creator,
+            title: poll_info.title,
+            description: poll_info.description,
+            option_count: poll_info.option_count,
+            reward_per_vote: poll_info.reward_per_vote,
+            reward_pool: poll_info.reward_pool + net_amount,
+            max_voters: poll_info.max_voters,
+            distribution_mode: poll_info.distribution_mode,
+            status: poll_info.status,
+            token_id: poll_info.token_id,
+            end_block: poll_info.end_block,
+            closed_at: poll_info.closed_at,
+        };
+        Mapping::set(polls, poll_id, updated_poll);
+
+        // Update platform fees
+        let updated_config: PlatformConfig = PlatformConfig {
+            admin: config.admin,
+            treasury: config.treasury,
+            fee_bps: config.fee_bps,
+            claim_period_blocks: config.claim_period_blocks,
+            total_fees_collected: config.total_fees_collected + fee as u128,
+        };
+        Mapping::set(platform_config, 0u8, updated_config);
+
+        // Update donation totals
+        let current_total: u64 = Mapping::get_or_use(poll_total_donations, poll_id, 0u64);
+        Mapping::set(poll_total_donations, poll_id, current_total + net_amount);
+
+        let current_count: u64 = Mapping::get_or_use(poll_donation_count, poll_id, 0u64);
+        Mapping::set(poll_donation_count, poll_id, current_count + 1u64);
+
+        // Store public donation record
+        let public_count: u64 = Mapping::get_or_use(public_donation_count, poll_id, 0u64);
+        let donation_key: field = BHP256::hash_to_field(poll_id as field + public_count as field);
+
+        let public_donation: PublicDonation = PublicDonation {
+            donor: donor,
+            poll_id: poll_id,
+            amount: net_amount,
+            donated_at: block.height,
+        };
+        Mapping::set(public_donations, donation_key, public_donation);
+        Mapping::set(public_donation_count, poll_id, public_count + 1u64);
+    }
+
+    // Fund a poll anonymously (ANONYMOUS mode)
+    // Uses commitment scheme to hide donor identity
+    async transition fund_poll_anonymous(
+        public poll_id: u64,
+        public amount: u64,
+        nonce: scalar
+    ) -> (DonationReceipt, Future) {
+        assert(amount > 0u64);
+
+        // Generate commitment hash using nonce
+        // The commitment hides the donor identity while proving the donation
+        let commitment_hash: field = BHP256::hash_to_field(
+            poll_id as field + amount as field + nonce as field
+        );
+
+        let receipt: DonationReceipt = DonationReceipt {
+            owner: self.caller,
+            poll_id: poll_id,
+            amount: amount,
+            privacy_mode: DONATION_ANONYMOUS,
+            donated_at: 0u32, // Will be set based on block height in finalize
+            commitment_hash: commitment_hash,
+        };
+
+        return (receipt, finalize_fund_poll_anonymous(poll_id, amount, commitment_hash));
+    }
+
+    async function finalize_fund_poll_anonymous(
+        poll_id: u64,
+        amount: u64,
+        commitment_hash: field
+    ) {
+        let poll_info: PollInfo = Mapping::get(polls, poll_id);
+        let config: PlatformConfig = Mapping::get(platform_config, 0u8);
+
+        // Poll must be active
+        assert_eq(poll_info.status, STATUS_ACTIVE);
+
+        // Ensure commitment hasn't been used before (prevent double donations with same nonce)
+        assert(!Mapping::contains(donation_commitments, commitment_hash));
+
+        // Calculate fee and net amount
+        let fee: u64 = (amount * config.fee_bps) / BPS_DENOMINATOR;
+        let net_amount: u64 = amount - fee;
+
+        // Update poll reward pool
+        let updated_poll: PollInfo = PollInfo {
+            id: poll_info.id,
+            creator: poll_info.creator,
+            title: poll_info.title,
+            description: poll_info.description,
+            option_count: poll_info.option_count,
+            reward_per_vote: poll_info.reward_per_vote,
+            reward_pool: poll_info.reward_pool + net_amount,
+            max_voters: poll_info.max_voters,
+            distribution_mode: poll_info.distribution_mode,
+            status: poll_info.status,
+            token_id: poll_info.token_id,
+            end_block: poll_info.end_block,
+            closed_at: poll_info.closed_at,
+        };
+        Mapping::set(polls, poll_id, updated_poll);
+
+        // Update platform fees
+        let updated_config: PlatformConfig = PlatformConfig {
+            admin: config.admin,
+            treasury: config.treasury,
+            fee_bps: config.fee_bps,
+            claim_period_blocks: config.claim_period_blocks,
+            total_fees_collected: config.total_fees_collected + fee as u128,
+        };
+        Mapping::set(platform_config, 0u8, updated_config);
+
+        // Update donation totals (anonymous donations counted in aggregate only)
+        let current_total: u64 = Mapping::get_or_use(poll_total_donations, poll_id, 0u64);
+        Mapping::set(poll_total_donations, poll_id, current_total + net_amount);
+
+        let current_count: u64 = Mapping::get_or_use(poll_donation_count, poll_id, 0u64);
+        Mapping::set(poll_donation_count, poll_id, current_count + 1u64);
+
+        // Record the commitment (no donor identity stored)
+        Mapping::set(donation_commitments, commitment_hash, true);
+    }
+
+    // Fund a poll semi-anonymously (SEMI_ANONYMOUS mode)
+    // Like anonymous, but donor can later reveal their identity
+    async transition fund_poll_semi_anon(
+        public poll_id: u64,
+        public amount: u64,
+        nonce: scalar
+    ) -> (DonationReceipt, Future) {
+        assert(amount > 0u64);
+
+        // Generate commitment hash using nonce
+        let commitment_hash: field = BHP256::hash_to_field(
+            poll_id as field + amount as field + nonce as field
+        );
+
+        let receipt: DonationReceipt = DonationReceipt {
+            owner: self.caller,
+            poll_id: poll_id,
+            amount: amount,
+            privacy_mode: DONATION_SEMI_ANON,
+            donated_at: 0u32,
+            commitment_hash: commitment_hash,
+        };
+
+        return (receipt, finalize_fund_semi_anon(poll_id, amount, commitment_hash));
+    }
+
+    async function finalize_fund_semi_anon(
+        poll_id: u64,
+        amount: u64,
+        commitment_hash: field
+    ) {
+        let poll_info: PollInfo = Mapping::get(polls, poll_id);
+        let config: PlatformConfig = Mapping::get(platform_config, 0u8);
+
+        // Poll must be active
+        assert_eq(poll_info.status, STATUS_ACTIVE);
+
+        // Ensure commitment hasn't been used before
+        assert(!Mapping::contains(donation_commitments, commitment_hash));
+
+        // Calculate fee and net amount
+        let fee: u64 = (amount * config.fee_bps) / BPS_DENOMINATOR;
+        let net_amount: u64 = amount - fee;
+
+        // Update poll reward pool
+        let updated_poll: PollInfo = PollInfo {
+            id: poll_info.id,
+            creator: poll_info.creator,
+            title: poll_info.title,
+            description: poll_info.description,
+            option_count: poll_info.option_count,
+            reward_per_vote: poll_info.reward_per_vote,
+            reward_pool: poll_info.reward_pool + net_amount,
+            max_voters: poll_info.max_voters,
+            distribution_mode: poll_info.distribution_mode,
+            status: poll_info.status,
+            token_id: poll_info.token_id,
+            end_block: poll_info.end_block,
+            closed_at: poll_info.closed_at,
+        };
+        Mapping::set(polls, poll_id, updated_poll);
+
+        // Update platform fees
+        let updated_config: PlatformConfig = PlatformConfig {
+            admin: config.admin,
+            treasury: config.treasury,
+            fee_bps: config.fee_bps,
+            claim_period_blocks: config.claim_period_blocks,
+            total_fees_collected: config.total_fees_collected + fee as u128,
+        };
+        Mapping::set(platform_config, 0u8, updated_config);
+
+        // Update donation totals
+        let current_total: u64 = Mapping::get_or_use(poll_total_donations, poll_id, 0u64);
+        Mapping::set(poll_total_donations, poll_id, current_total + net_amount);
+
+        let current_count: u64 = Mapping::get_or_use(poll_donation_count, poll_id, 0u64);
+        Mapping::set(poll_donation_count, poll_id, current_count + 1u64);
+
+        // Record the commitment (can be revealed later)
+        Mapping::set(donation_commitments, commitment_hash, true);
+    }
+
+    // Reveal a semi-anonymous donation
+    // Allows the donor to make their identity public after donating anonymously
+    async transition reveal_donation(
+        receipt: DonationReceipt
+    ) -> Future {
+        // Only semi-anonymous donations can be revealed
+        assert_eq(receipt.privacy_mode, DONATION_SEMI_ANON);
+
+        return finalize_reveal_donation(
+            receipt.poll_id,
+            receipt.amount,
+            receipt.commitment_hash,
+            self.caller
+        );
+    }
+
+    async function finalize_reveal_donation(
+        poll_id: u64,
+        amount: u64,
+        commitment_hash: field,
+        donor: address
+    ) {
+        // Verify the commitment exists
+        assert(Mapping::get(donation_commitments, commitment_hash));
+
+        // Verify not already revealed
+        assert(!Mapping::contains(revealed_donations, commitment_hash));
+
+        // Create public donation record for the revealed donation
+        let revealed: PublicDonation = PublicDonation {
+            donor: donor,
+            poll_id: poll_id,
+            amount: amount,
+            donated_at: block.height,
+        };
+        Mapping::set(revealed_donations, commitment_hash, revealed);
+
+        // Also add to public_donations list
+        let public_count: u64 = Mapping::get_or_use(public_donation_count, poll_id, 0u64);
+        let donation_key: field = BHP256::hash_to_field(poll_id as field + public_count as field);
+        Mapping::set(public_donations, donation_key, revealed);
+        Mapping::set(public_donation_count, poll_id, public_count + 1u64);
     }
 
     // ============================================

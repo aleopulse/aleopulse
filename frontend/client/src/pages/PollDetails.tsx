@@ -83,7 +83,8 @@ export default function PollDetails() {
   const pollId = id ? parseInt(id, 10) : null;
 
   // Fetch poll data and vote status
-  const fetchPollData = useCallback(async () => {
+  // skipVoteCheck: if true, skip re-checking vote status (used after successful vote)
+  const fetchPollData = useCallback(async (skipVoteCheck = false) => {
     if (pollId === null || isNaN(pollId)) {
       setIsLoading(false);
       return;
@@ -94,8 +95,8 @@ export default function PollDetails() {
       const pollData = await getPoll(pollId);
       setPoll(pollData);
 
-      // Check if user has voted and claimed
-      if (address) {
+      // Check if user has voted and claimed (skip if we just voted to avoid race condition)
+      if (address && !skipVoteCheck) {
         const voted = await checkHasVoted(pollId);
         setUserHasVoted(voted);
 
@@ -214,8 +215,8 @@ export default function PollDetails() {
         // Don't show error to user - the on-chain vote succeeded
       }
 
-      // Refresh poll data to get updated vote counts
-      await fetchPollData();
+      // Refresh poll data to get updated vote counts (skip vote check to avoid race condition)
+      await fetchPollData(true);
     } catch (error) {
       console.error("Failed to vote:", error);
       showTransactionErrorToast("Failed to submit vote", error instanceof Error ? error : "Transaction failed");
