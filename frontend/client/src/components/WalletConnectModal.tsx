@@ -1,6 +1,5 @@
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
-import type { WalletName } from "@demox-labs/aleo-wallet-adapter-base";
-import { DecryptPermission, WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
+import type { WalletName } from "@provablehq/aleo-wallet-standard";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +22,12 @@ interface WalletConnectModalProps {
 // Supported Aleo wallets
 const ALEO_WALLETS = [
   {
+    name: "Shield Wallet",
+    icon: "https://www.shield.app/favicon.ico",
+    url: "https://www.shield.app/",
+    description: "Shield wallet for Aleo",
+  },
+  {
     name: "Leo Wallet",
     icon: "https://www.leo.app/favicon.ico",
     url: "https://www.leo.app/",
@@ -37,7 +42,7 @@ const ALEO_WALLETS = [
 ];
 
 export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalProps) {
-  const { wallets, select, connect, connecting, connected, wallet } = useWallet();
+  const { wallets, selectWallet, connect, connecting, connected, wallet } = useWallet();
   const { network } = useNetwork();
   const [isRetrying, setIsRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,18 +77,13 @@ export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalPro
       }
 
       // First select the wallet adapter
-      select(walletName);
+      selectWallet(walletName);
 
       // Give the adapter a moment to initialize, then connect
       await new Promise(resolve => setTimeout(resolve, 200));
 
-      // Determine the network based on current selection
-      const aleoNetwork = network === "mainnet"
-        ? WalletAdapterNetwork.MainnetBeta
-        : WalletAdapterNetwork.TestnetBeta;
-
       // Now actually connect to the wallet
-      await connect(DecryptPermission.UponRequest, aleoNetwork);
+      await connect();
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to connect";
       console.error(`Wallet connection attempt ${retryCount + 1} failed:`, err);
@@ -102,12 +102,12 @@ export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalPro
       // Final error
       setError(
         errorMessage.includes("not available")
-          ? "Wallet not ready. Please ensure Leo Wallet is unlocked and try again."
+          ? "Wallet not ready. Please ensure your wallet is unlocked and try again."
           : errorMessage
       );
       toast.error("Failed to connect wallet. Please try again.");
     }
-  }, [select, connect, network]);
+  }, [selectWallet, connect]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -187,7 +187,7 @@ export function WalletConnectModal({ open, onOpenChange }: WalletConnectModalPro
               ))}
               {error && (
                 <p className="text-xs text-center text-muted-foreground mt-2">
-                  Tip: Make sure Leo Wallet is unlocked before connecting
+                  Tip: Make sure your wallet is unlocked before connecting
                 </p>
               )}
             </div>

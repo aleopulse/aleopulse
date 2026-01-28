@@ -3,10 +3,9 @@
  * Provides wallet connection and transaction functionality
  */
 
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
-import { Transaction } from "@demox-labs/aleo-wallet-adapter-base";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 import { useCallback, useMemo } from "react";
-import { useNetwork, ALEO_NETWORK_IDS } from "@/contexts/NetworkContext";
+import { useNetwork } from "@/contexts/NetworkContext";
 import { shortenAddress, stringToField, toU8, toU32, toU64, toBool } from "@/lib/aleo-encoding";
 
 export interface TransactionInput {
@@ -18,7 +17,7 @@ export interface TransactionInput {
 
 export function useAleoWallet() {
   const {
-    publicKey,
+    address,
     wallet,
     connected,
     connecting,
@@ -26,14 +25,13 @@ export function useAleoWallet() {
     connect,
     disconnect,
     requestRecords,
-    requestTransaction,
+    executeTransaction: walletExecuteTransaction,
     transactionStatus,
   } = useWallet();
 
-  const { config, network } = useNetwork();
+  const { config } = useNetwork();
 
   // Format the connected address
-  const address = useMemo(() => publicKey || null, [publicKey]);
   const shortAddress = useMemo(
     () => (address ? shortenAddress(address) : null),
     [address]
@@ -44,34 +42,25 @@ export function useAleoWallet() {
    */
   const executeTransaction = useCallback(
     async (input: TransactionInput): Promise<string | null> => {
-      if (!connected || !requestTransaction || !address) {
+      if (!connected || !walletExecuteTransaction || !address) {
         throw new Error("Wallet not connected");
       }
 
       try {
-        // Get the Aleo network ID (Leo Wallet uses "testnetbeta" for testnet)
-        const aleoNetworkId = ALEO_NETWORK_IDS[network];
+        const result = await walletExecuteTransaction({
+          program: input.programId,
+          function: input.functionName,
+          inputs: input.inputs,
+          fee: input.fee || 100000, // Default fee: 0.1 credits
+        });
 
-        // Use Transaction.createTransaction to build the proper AleoTransaction object
-        const transaction = Transaction.createTransaction(
-          address,
-          aleoNetworkId,
-          input.programId,
-          input.functionName,
-          input.inputs,
-          input.fee || 100000, // Default fee: 0.1 credits
-          false // feePrivate
-        );
-
-        const txId = await requestTransaction(transaction);
-
-        return txId;
+        return result?.transactionId ?? null;
       } catch (error) {
         console.error("Transaction error:", error);
         throw error;
       }
     },
-    [connected, requestTransaction, address, network]
+    [connected, walletExecuteTransaction, address]
   );
 
   /**

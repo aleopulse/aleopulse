@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 import { useWalletModal } from "@/components/WalletProvider";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,6 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, ExternalLink } from "lucide-react";
 import { useNetwork } from "@/contexts/NetworkContext";
-import { DecryptPermission, WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
 
 interface WalletSelectionModalProps {
   children: React.ReactNode;
@@ -21,6 +20,12 @@ interface WalletSelectionModalProps {
 
 // Supported Aleo wallets
 const ALEO_WALLETS = [
+  {
+    name: "Shield Wallet",
+    icon: "https://www.shield.app/favicon.ico",
+    url: "https://www.shield.app/",
+    description: "Shield wallet for Aleo",
+  },
   {
     name: "Leo Wallet",
     icon: "https://www.leo.app/favicon.ico",
@@ -37,7 +42,7 @@ const ALEO_WALLETS = [
 
 export function WalletSelectionModal({ children }: WalletSelectionModalProps) {
   const [open, setOpen] = useState(false);
-  const { wallets, select, connect, connected, wallet } = useWallet();
+  const { wallets, selectWallet, connect, connected, wallet } = useWallet();
   const { setVisible } = useWalletModal();
   const { network } = useNetwork();
 
@@ -53,17 +58,12 @@ export function WalletSelectionModal({ children }: WalletSelectionModalProps) {
       const selectedWallet = wallets.find((w) => w.adapter.name === walletName);
       if (selectedWallet) {
         // First select the wallet adapter
-        select(selectedWallet.adapter.name);
+        selectWallet(selectedWallet.adapter.name);
         // Give the adapter a moment to initialize, then connect
         await new Promise(resolve => setTimeout(resolve, 200));
 
-        // Determine the network based on current selection
-        const aleoNetwork = network === "mainnet"
-          ? WalletAdapterNetwork.MainnetBeta
-          : WalletAdapterNetwork.TestnetBeta;
-
         // Now actually connect to the wallet
-        await connect(DecryptPermission.UponRequest, aleoNetwork);
+        await connect();
         setOpen(false);
       }
     } catch (error) {

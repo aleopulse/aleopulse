@@ -32,7 +32,7 @@ import {
   Clock,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { getAllBalances, type AllBalances, parseToSmallestUnit } from "@/lib/balance";

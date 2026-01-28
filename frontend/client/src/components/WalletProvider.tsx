@@ -1,13 +1,12 @@
 import { ReactNode, useMemo, createContext, useContext, useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { WalletProvider as AleoWalletProvider } from "@demox-labs/aleo-wallet-adapter-react";
-import { LeoWalletAdapter } from "@demox-labs/aleo-wallet-adapter-leo";
-import { DecryptPermission, WalletAdapterNetwork } from "@demox-labs/aleo-wallet-adapter-base";
+import { AleoWalletProvider } from "@provablehq/aleo-wallet-adaptor-react";
+import { LeoWalletAdapter } from "@provablehq/aleo-wallet-adaptor-leo";
+import { ShieldWalletAdapter } from "@provablehq/aleo-wallet-adaptor-shield";
+import { DecryptPermission } from "@provablehq/aleo-wallet-adaptor-core";
+import { Network } from "@provablehq/aleo-types";
 import { NetworkProvider, useNetwork } from "@/contexts/NetworkContext";
 import { queryClient } from "@/lib/queryClient";
-
-// Import the wallet adapter CSS
-import "@demox-labs/aleo-wallet-adapter-reactui/styles.css";
 
 interface WalletProviderProps {
   children: ReactNode;
@@ -54,14 +53,15 @@ function AleoWalletWrapper({ children }: { children: ReactNode }) {
       new LeoWalletAdapter({
         appName: "AleoPulse",
       }),
+      new ShieldWalletAdapter(),
     ];
   }, [network]);
 
   // Get the appropriate network from environment
   const aleoNetwork = useMemo(() => {
     return network === "mainnet"
-      ? WalletAdapterNetwork.MainnetBeta
-      : WalletAdapterNetwork.TestnetBeta;
+      ? Network.MAINNET
+      : Network.TESTNET;
   }, [network]);
 
   return (
@@ -69,7 +69,7 @@ function AleoWalletWrapper({ children }: { children: ReactNode }) {
       wallets={wallets}
       decryptPermission={DecryptPermission.UponRequest}
       network={aleoNetwork}
-      autoConnect={false}  // Disabled to prevent race condition with extension initialization
+      autoConnect={false}
     >
       <CustomWalletModalProvider>
         {children}

@@ -3,7 +3,7 @@
  * Use this instead of checking `connected` from useWallet directly
  */
 
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 
 export interface UseWalletConnectionResult {
   // Whether wallet is connected
@@ -18,11 +18,11 @@ export interface UseWalletConnectionResult {
 }
 
 export function useWalletConnection(): UseWalletConnectionResult {
-  const { connected, connecting, publicKey } = useWallet();
+  const { connected, connecting, address } = useWallet();
 
   return {
     isConnected: connected,
-    address: publicKey || null,
+    address: address || null,
     isConnecting: connecting,
     // Backward compatibility - Aleo uses native wallets only
     isPrivyWallet: false,

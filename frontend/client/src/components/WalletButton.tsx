@@ -1,4 +1,4 @@
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 import { useWalletModal } from "@/components/WalletProvider";
 import { Button } from "@/components/ui/button";
 import { WalletConnectModal } from "@/components/WalletConnectModal";
@@ -15,7 +15,7 @@ import { Link } from "wouter";
 import { useNetwork } from "@/contexts/NetworkContext";
 
 export function WalletButton() {
-  const { publicKey, wallet, disconnect, connected } = useWallet();
+  const { address, wallet, disconnect, connected } = useWallet();
   const { setVisible } = useWalletModal();
   const { config } = useNetwork();
 
@@ -24,16 +24,16 @@ export function WalletButton() {
   };
 
   const copyAddress = () => {
-    if (publicKey) {
-      navigator.clipboard.writeText(publicKey);
+    if (address) {
+      navigator.clipboard.writeText(address);
       toast.success("Address copied to clipboard");
     }
   };
 
   const viewOnExplorer = () => {
-    if (publicKey) {
+    if (address) {
       window.open(
-        `${config.explorerUrl}/address/${publicKey}`,
+        `${config.explorerUrl}/address/${address}`,
         "_blank"
       );
     }
@@ -69,7 +69,7 @@ export function WalletButton() {
           {wallet?.adapter.icon && (
             <img src={wallet.adapter.icon} alt={wallet.adapter.name} className="w-4 h-4" />
           )}
-          {publicKey ? truncateAddress(publicKey) : "Connected"}
+          {address ? truncateAddress(address) : "Connected"}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">

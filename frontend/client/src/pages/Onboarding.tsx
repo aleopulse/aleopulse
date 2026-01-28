@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { UserPreferencesProvider, useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { Loader2 } from "lucide-react";
