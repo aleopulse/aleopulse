@@ -50,7 +50,7 @@ export function TierRequirementsPopover({
                 <span className="font-medium text-sm">Silver</span>
               </div>
               <div className="text-right text-xs">
-                <p className="text-muted-foreground">{(TIER_PULSE_THRESHOLDS[TIERS.SILVER] / 1e8).toLocaleString()}+ PULSE</p>
+                <p className="text-muted-foreground">{(TIER_PULSE_THRESHOLDS[TIERS.SILVER] / 1e6).toLocaleString()}+ PULSE</p>
                 <p className="font-medium">{TIER_VOTE_LIMITS[TIERS.SILVER]} votes/day</p>
               </div>
             </div>
@@ -61,7 +61,7 @@ export function TierRequirementsPopover({
                 <span className="font-medium text-sm">Gold</span>
               </div>
               <div className="text-right text-xs">
-                <p className="text-muted-foreground">{(TIER_PULSE_THRESHOLDS[TIERS.GOLD] / 1e8).toLocaleString()}+ PULSE</p>
+                <p className="text-muted-foreground">{(TIER_PULSE_THRESHOLDS[TIERS.GOLD] / 1e6).toLocaleString()}+ PULSE</p>
                 <p className="font-medium">{TIER_VOTE_LIMITS[TIERS.GOLD]} votes/day</p>
               </div>
             </div>
@@ -72,7 +72,7 @@ export function TierRequirementsPopover({
                 <span className="font-medium text-sm">Platinum</span>
               </div>
               <div className="text-right text-xs">
-                <p className="text-muted-foreground">{(TIER_PULSE_THRESHOLDS[TIERS.PLATINUM] / 1e8).toLocaleString()}+ PULSE</p>
+                <p className="text-muted-foreground">{(TIER_PULSE_THRESHOLDS[TIERS.PLATINUM] / 1e6).toLocaleString()}+ PULSE</p>
                 <p className="font-medium">{TIER_VOTE_LIMITS[TIERS.PLATINUM]} votes/day</p>
               </div>
             </div>

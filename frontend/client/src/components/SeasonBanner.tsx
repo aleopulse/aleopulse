@@ -12,7 +12,7 @@ interface SeasonBannerProps {
 }
 
 export function SeasonBanner({ season, userPoints, userRank, compact = false }: SeasonBannerProps) {
-  const pulsePool = Number(season.totalPulsePool) / 1e8;
+  const pulsePool = Number(season.totalPulsePool) / 1e6;
   const startDate = new Date(season.startTime);
   const endDate = new Date(season.endTime);
   const now = Date.now();

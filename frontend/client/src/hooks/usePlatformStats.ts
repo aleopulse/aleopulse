@@ -144,8 +144,8 @@ export function usePlatformStats() {
 
   // Format currency for display (assuming octas, convert to MOVE)
   const formatRewards = (octas: number): string => {
-    // Convert from octas (1e8) to MOVE
-    const move = octas / 1e8;
+    // Convert from octas (1e6) to MOVE
+    const move = octas / 1e6;
     if (move >= 1000000) {
       return `$${(move / 1000000).toFixed(1)}M+`;
     }

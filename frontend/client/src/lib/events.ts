@@ -132,7 +132,7 @@ export async function fetchUserActivity(
     return result.data.events.map((event): ActivityEvent => {
       const activityType = mapEventTypeToActivityType(event.type);
       const pollId = event.data.poll_id ? parseInt(event.data.poll_id, 10) : undefined;
-      const amount = event.data.amount ? parseInt(event.data.amount, 10) / 1e8 : undefined;
+      const amount = event.data.amount ? parseInt(event.data.amount, 10) / 1e6 : undefined;
       const optionIndex = event.data.option_index ? parseInt(event.data.option_index, 10) : undefined;
 
       // Get timestamp from block metadata if available, otherwise use current time

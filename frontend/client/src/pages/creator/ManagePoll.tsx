@@ -275,8 +275,8 @@ export default function ManagePoll() {
     );
   }
 
-  const rewardPoolMove = poll.reward_pool / 1e8;
-  const rewardPerVoteMove = poll.reward_per_vote / 1e8;
+  const rewardPoolMove = poll.reward_pool / 1e6;
+  const rewardPerVoteMove = poll.reward_per_vote / 1e6;
   const estimatedRewardPerVoter = poll.totalVotes > 0
     ? (poll.reward_per_vote > 0 ? rewardPerVoteMove : rewardPoolMove / poll.totalVotes)
     : rewardPerVoteMove > 0 ? rewardPerVoteMove : 0;

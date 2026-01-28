@@ -75,7 +75,7 @@ export default function DonorHistory() {
     const totals: Record<string, number> = {};
     fundingHistory.forEach((f) => {
       const coinSymbol = getCoinSymbol(f.coinTypeId as CoinTypeId);
-      totals[coinSymbol] = (totals[coinSymbol] || 0) + (f.amount / 1e8);
+      totals[coinSymbol] = (totals[coinSymbol] || 0) + (f.amount / 1e6);
     });
     return totals;
   }, [fundingHistory]);
@@ -172,7 +172,7 @@ export default function DonorHistory() {
                           </Link>
                         </TableCell>
                         <TableCell className="text-right font-mono">
-                          {(record.amount / 1e8).toFixed(4)}
+                          {(record.amount / 1e6).toFixed(4)}
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline">{coinSymbol}</Badge>

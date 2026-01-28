@@ -363,7 +363,7 @@ export default function ManagePolls() {
             ) : (
               <div className="divide-y divide-border/50">
                 {filteredPolls.map((poll) => {
-                  const rewardPool = poll.reward_pool / 1e8;
+                  const rewardPool = poll.reward_pool / 1e6;
                   const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
                   const isActionLoading = actionLoading?.pollId === poll.id;
 

@@ -375,8 +375,8 @@ export default function PollDetails() {
     );
   }
 
-  const rewardPerVoteMove = poll.reward_per_vote / 1e8;
-  const rewardPoolMove = poll.reward_pool / 1e8;
+  const rewardPerVoteMove = poll.reward_per_vote / 1e6;
+  const rewardPoolMove = poll.reward_pool / 1e6;
   const estimatedRewardPerVoter = poll.totalVotes > 0
     ? (poll.reward_per_vote > 0 ? rewardPerVoteMove : rewardPoolMove / poll.totalVotes)
     : 0;
@@ -792,7 +792,7 @@ export default function PollDetails() {
           ) : recommendedPolls.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {recommendedPolls.map((recPoll) => {
-                const recRewardPool = recPoll.reward_pool / 1e8;
+                const recRewardPool = recPoll.reward_pool / 1e6;
                 return (
                   <Link key={recPoll.id} href={`/poll/${recPoll.id}`}>
                     <Card className="border-border/50 hover:border-primary/50 hover:bg-muted/30 transition-all cursor-pointer h-full">

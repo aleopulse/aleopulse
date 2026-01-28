@@ -55,7 +55,7 @@ export function TierProgressBar({
 
   const pulseNeeded = nextThreshold - pulseAmount;
   const pulseNeededDisplay = pulseNeeded > 0n
-    ? (Number(pulseNeeded) / 1e8).toLocaleString()
+    ? (Number(pulseNeeded) / 1e6).toLocaleString()
     : "0";
 
   const gradient = tierGradients[nextTier as keyof typeof tierGradients] || "from-primary to-accent";

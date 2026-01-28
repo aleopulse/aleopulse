@@ -108,7 +108,7 @@ export default function DonorDashboard() {
       // Skip MOVE (coin_type_id = 0), only aggregate PULSE and USDC
       if (f.coinTypeId === COIN_TYPES.MOVE) return;
       const coinSymbol = getCoinSymbol(f.coinTypeId as CoinTypeId);
-      fundedByToken[coinSymbol] = (fundedByToken[coinSymbol] || 0) + (f.amount / 1e8);
+      fundedByToken[coinSymbol] = (fundedByToken[coinSymbol] || 0) + (f.amount / 1e6);
 
       // Count by privacy mode
       const privacyMode = f.privacyMode ?? DONATION_PRIVACY.PUBLIC;
@@ -144,9 +144,9 @@ export default function DonorDashboard() {
     );
     const totalDistributed = completedPolls.reduce((sum, poll) => {
       const perVoter = poll.reward_per_vote > 0
-        ? poll.reward_per_vote / 1e8
+        ? poll.reward_per_vote / 1e6
         : poll.totalVotes > 0
-        ? (poll.reward_pool / 1e8) / poll.totalVotes
+        ? (poll.reward_pool / 1e6) / poll.totalVotes
         : 0;
       return sum + (perVoter * poll.totalVotes);
     }, 0);
@@ -172,7 +172,7 @@ export default function DonorDashboard() {
 
   // Render poll card with optional action label
   const renderPollCard = (poll: PollWithMeta, actionLabel?: string) => {
-    const rewardPool = poll.reward_pool / 1e8;
+    const rewardPool = poll.reward_pool / 1e6;
     const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
     return (
       <PollCard

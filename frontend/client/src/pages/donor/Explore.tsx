@@ -147,7 +147,7 @@ export default function DonorExplore() {
       showTransactionSuccessToast(
         result.hash,
         "Poll Funded!",
-        `You contributed ${(amount / 1e8).toFixed(4)} ${getCoinSymbol(coinTypeId)} ${privacyLabel} to this poll.`,
+        `You contributed ${(amount / 1e6).toFixed(4)} ${getCoinSymbol(coinTypeId)} ${privacyLabel} to this poll.`,
         config.explorerUrl,
         false
       );
@@ -232,7 +232,7 @@ export default function DonorExplore() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredPolls.map((poll) => {
-            const rewardPool = poll.reward_pool / 1e8;
+            const rewardPool = poll.reward_pool / 1e6;
             const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
 
             return (

@@ -134,7 +134,7 @@ export default function StakingPage() {
     }
 
     const amount = parseFloat(stakeAmount);
-    const amountInOctas = Math.floor(amount * 1e8);
+    const amountInOctas = Math.floor(amount * 1e6);
 
     if (amountInOctas > pulseBalance) {
       toast.error("Insufficient PULSE balance");
@@ -183,7 +183,7 @@ export default function StakingPage() {
       const result = await unstake({ receipt });
 
       toast.success("Unstaked successfully!", {
-        description: `${(position.amount / 1e8).toFixed(2)} PULSE returned to your wallet`,
+        description: `${(position.amount / 1e6).toFixed(2)} PULSE returned to your wallet`,
         action: {
           label: "View",
           onClick: () => window.open(`${config.explorerUrl}/txn/${result.hash}?network=${network}`, "_blank"),
@@ -213,7 +213,7 @@ export default function StakingPage() {
       const result = await unstakeAll();
 
       toast.success("Unstaked all unlocked positions!", {
-        description: `${(unlockableAmount / 1e8).toFixed(2)} PULSE returned to your wallet`,
+        description: `${(unlockableAmount / 1e6).toFixed(2)} PULSE returned to your wallet`,
         action: {
           label: "View",
           onClick: () => window.open(`${config.explorerUrl}/txn/${result.hash}?network=${network}`, "_blank"),
@@ -239,7 +239,7 @@ export default function StakingPage() {
 
   // Set max amount
   const handleMaxAmount = () => {
-    const amount = pulseBalance / 1e8;
+    const amount = pulseBalance / 1e6;
     setStakeAmount(amount.toString());
   };
 
@@ -356,7 +356,7 @@ export default function StakingPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Your Staked</p>
                 <p className="text-xl font-bold font-mono">
-                  {(totalStaked / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  {(totalStaked / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -372,7 +372,7 @@ export default function StakingPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Unlockable</p>
                 <p className="text-xl font-bold font-mono">
-                  {(unlockableAmount / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  {(unlockableAmount / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -388,7 +388,7 @@ export default function StakingPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Pool Total</p>
                 <p className="text-xl font-bold font-mono">
-                  {(poolTotalStaked / 1e8).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  {(poolTotalStaked / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                 </p>
               </div>
             </div>
@@ -445,11 +445,11 @@ export default function StakingPage() {
                 <Progress value={tierProgress.progress} className="h-3" />
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
-                    Total: {((pulseBalance + totalStaked) / 1e8).toLocaleString(undefined, { maximumFractionDigits: 0 })} PULSE
+                    Total: {((pulseBalance + totalStaked) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 })} PULSE
                   </span>
                   {tierProgress.remaining > 0 && (
                     <span className="text-muted-foreground">
-                      Need {(tierProgress.remaining / 1e8).toLocaleString(undefined, { maximumFractionDigits: 0 })} more
+                      Need {(tierProgress.remaining / 1e6).toLocaleString(undefined, { maximumFractionDigits: 0 })} more
                     </span>
                   )}
                 </div>
@@ -458,11 +458,11 @@ export default function StakingPage() {
               <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                 <div>
                   <p className="text-sm text-muted-foreground">Wallet Balance</p>
-                  <p className="text-lg font-mono">{(pulseBalance / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} PULSE</p>
+                  <p className="text-lg font-mono">{(pulseBalance / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })} PULSE</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Staked Amount</p>
-                  <p className="text-lg font-mono">{(totalStaked / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} PULSE</p>
+                  <p className="text-lg font-mono">{(totalStaked / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })} PULSE</p>
                 </div>
               </div>
             </CardContent>
@@ -528,7 +528,7 @@ export default function StakingPage() {
                         </div>
                         <div>
                           <p className="font-bold font-mono">
-                            {(position.amount / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })} PULSE
+                            {(position.amount / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })} PULSE
                           </p>
                           <p className="text-sm text-muted-foreground">
                             Locked for {LOCK_PERIODS.find(p => p.seconds === position.lockDuration)?.label || `${Math.floor(position.lockDuration / 86400)} days`}
@@ -650,7 +650,7 @@ export default function StakingPage() {
                     </Badge>
                     <ArrowUpRight className="w-4 h-4 text-muted-foreground" />
                     <Badge variant="default" className="bg-purple-600">
-                      {TIER_NAMES[calculatePotentialTier(parseFloat(stakeAmount) * 1e8) as keyof typeof TIER_NAMES]}
+                      {TIER_NAMES[calculatePotentialTier(parseFloat(stakeAmount) * 1e6) as keyof typeof TIER_NAMES]}
                     </Badge>
                   </div>
                 </div>

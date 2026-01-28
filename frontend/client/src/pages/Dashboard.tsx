@@ -218,7 +218,7 @@ export default function Dashboard() {
     const rewardsByToken: Record<string, number> = {};
     relevantPolls.forEach((p) => {
       const coinSymbol = getCoinSymbol(p.coin_type_id as CoinTypeId);
-      rewardsByToken[coinSymbol] = (rewardsByToken[coinSymbol] || 0) + (p.reward_pool / 1e8);
+      rewardsByToken[coinSymbol] = (rewardsByToken[coinSymbol] || 0) + (p.reward_pool / 1e6);
     });
 
     return {
@@ -238,7 +238,7 @@ export default function Dashboard() {
 
   // Render poll card from PollWithMeta
   const renderPollCard = (poll: PollWithMeta) => {
-    const rewardPool = poll.reward_pool / 1e8;
+    const rewardPool = poll.reward_pool / 1e6;
     const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
     const isPrivate = isPollPrivate(poll.id);
     const hasInvite = hasValidInvite(poll.id);

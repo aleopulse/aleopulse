@@ -78,7 +78,7 @@ export function DonationDialog({
 
   // Calculate fees
   const { grossAmount, fee, netAmount } = useMemo(() => {
-    const gross = parseFloat(amount) * 1e8 || 0;
+    const gross = parseFloat(amount) * 1e6 || 0;
     return {
       grossAmount: gross,
       fee: calculatePlatformFee(gross),
@@ -120,7 +120,7 @@ export function DonationDialog({
             <div className="flex items-center justify-between text-sm mb-2">
               <span className="text-muted-foreground">Current Reward Pool</span>
               <span className="font-mono font-semibold">
-                {(currentRewardPool / 1e8).toFixed(4)} {coinSymbol}
+                {(currentRewardPool / 1e6).toFixed(4)} {coinSymbol}
               </span>
             </div>
             <div className="flex items-center justify-between text-sm">
@@ -178,15 +178,15 @@ export function DonationDialog({
               <div className="mt-3 p-3 rounded-lg bg-muted/30 space-y-1.5 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Donation Amount</span>
-                  <span className="font-mono">{(grossAmount / 1e8).toFixed(4)} {coinSymbol}</span>
+                  <span className="font-mono">{(grossAmount / 1e6).toFixed(4)} {coinSymbol}</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Platform Fee ({PLATFORM_FEE_BPS / 100}%)</span>
-                  <span className="font-mono">-{(fee / 1e8).toFixed(4)} {coinSymbol}</span>
+                  <span className="font-mono">-{(fee / 1e6).toFixed(4)} {coinSymbol}</span>
                 </div>
                 <div className="border-t border-border pt-1.5 flex justify-between font-medium">
                   <span>Net Contribution</span>
-                  <span className="font-mono text-primary">{(netAmount / 1e8).toFixed(4)} {coinSymbol}</span>
+                  <span className="font-mono text-primary">{(netAmount / 1e6).toFixed(4)} {coinSymbol}</span>
                 </div>
               </div>
             )}

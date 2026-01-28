@@ -574,7 +574,7 @@ function SeasonCard({
           {season.totalPulsePool && season.totalPulsePool !== "0" && (
             <div className="flex items-center gap-2">
               <Coins className="h-4 w-4 text-muted-foreground" />
-              <span>{BigInt(season.totalPulsePool) / BigInt(1e8)} PULSE</span>
+              <span>{BigInt(season.totalPulsePool) / BigInt(1e6)} PULSE</span>
             </div>
           )}
 

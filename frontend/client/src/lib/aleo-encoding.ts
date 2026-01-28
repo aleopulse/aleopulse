@@ -210,9 +210,9 @@ export function parseAddress(value: string): string {
 }
 
 /**
- * Convert PULSE amount to display format (8 decimals)
+ * Convert PULSE amount to display format (6 decimals)
  */
-export function formatPulseAmount(amount: bigint | string, decimals: number = 8): string {
+export function formatPulseAmount(amount: bigint | string, decimals: number = 6): string {
   const value = typeof amount === "string" ? parseU128(amount) : amount;
   const divisor = BigInt(10 ** decimals);
   const whole = value / divisor;
@@ -227,9 +227,9 @@ export function formatPulseAmount(amount: bigint | string, decimals: number = 8)
 }
 
 /**
- * Convert display amount to PULSE units (8 decimals)
+ * Convert display amount to PULSE units (6 decimals)
  */
-export function parsePulseAmount(amount: string, decimals: number = 8): bigint {
+export function parsePulseAmount(amount: string, decimals: number = 6): bigint {
   const [whole, fraction = ""] = amount.split(".");
   const paddedFraction = fraction.padEnd(decimals, "0").slice(0, decimals);
   return BigInt(whole + paddedFraction);

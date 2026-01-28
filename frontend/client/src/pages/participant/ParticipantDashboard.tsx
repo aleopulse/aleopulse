@@ -56,7 +56,7 @@ export default function ParticipantDashboard() {
   const dailyVoteLimit = TIER_VOTE_LIMITS[userTier as keyof typeof TIER_VOTE_LIMITS] || 3;
   const votesToday = 0; // TODO: Track actual votes today
   const userPulseBalance = BigInt(0); // TODO: Fetch from wallet/contract
-  const nextTierXp = BigInt(100 * 1e8); // Example threshold
+  const nextTierXp = BigInt(100 * 1e6); // Example threshold
 
   // Calculate time until daily vote reset (midnight UTC)
   const getResetCountdown = () => {
@@ -158,9 +158,9 @@ export default function ParticipantDashboard() {
       // Skip MOVE (coin_type_id = 0), only aggregate PULSE and USDC
       if (p.coin_type_id === COIN_TYPES.MOVE) return;
       const perVoter = p.reward_per_vote > 0
-        ? p.reward_per_vote / 1e8
+        ? p.reward_per_vote / 1e6
         : p.totalVotes > 0
-        ? (p.reward_pool / 1e8) / p.totalVotes
+        ? (p.reward_pool / 1e6) / p.totalVotes
         : 0;
       const coinSymbol = getCoinSymbol(p.coin_type_id as CoinTypeId);
       pendingByToken[coinSymbol] = (pendingByToken[coinSymbol] || 0) + perVoter;
@@ -173,9 +173,9 @@ export default function ParticipantDashboard() {
       if (p.coin_type_id === COIN_TYPES.MOVE) return;
       if (claimedPollIds.has(p.id) && p.reward_pool > 0) {
         const perVoter = p.reward_per_vote > 0
-          ? p.reward_per_vote / 1e8
+          ? p.reward_per_vote / 1e6
           : p.totalVotes > 0
-          ? (p.reward_pool / 1e8) / p.totalVotes
+          ? (p.reward_pool / 1e6) / p.totalVotes
           : 0;
         const coinSymbol = getCoinSymbol(p.coin_type_id as CoinTypeId);
         earnedByToken[coinSymbol] = (earnedByToken[coinSymbol] || 0) + perVoter;
@@ -258,7 +258,7 @@ export default function ParticipantDashboard() {
 
   // Render poll card
   const renderPollCard = (poll: PollWithMeta, hasVoted: boolean = false) => {
-    const rewardPool = poll.reward_pool / 1e8;
+    const rewardPool = poll.reward_pool / 1e6;
     const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
     return (
       <PollCard
@@ -449,9 +449,9 @@ export default function ParticipantDashboard() {
             <div className="space-y-3">
               {claimablePolls.map((poll) => {
                 const perVoter = poll.reward_per_vote > 0
-                  ? poll.reward_per_vote / 1e8
+                  ? poll.reward_per_vote / 1e6
                   : poll.totalVotes > 0
-                  ? (poll.reward_pool / 1e8) / poll.totalVotes
+                  ? (poll.reward_pool / 1e6) / poll.totalVotes
                   : 0;
                 const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
                 return (
