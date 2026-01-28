@@ -20,7 +20,10 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
-    "test:e2e:report": "playwright show-report"
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:headless": "playwright test --config=playwright.headless.config.ts",
+    "test:e2e:wallet": "playwright test e2e/wallet-integration",
+    "test:e2e:all": "npm run test:e2e:headless && npm run test:e2e:wallet"
   },
   "dependencies": {
     "@demox-labs/aleo-wallet-adapter-base": "^0.0.22",
