@@ -1,0 +1,13 @@
+{
+  "name": "leopulse-contract-scripts",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Scripts for Aleo contract operations",
+  "scripts": {
+    "register-token": "node register-token.mjs"
+  },
+  "dependencies": {
+    "@provablehq/sdk": "^0.9.15",
+    "dotenv": "^16.4.5"
+  }
+}
