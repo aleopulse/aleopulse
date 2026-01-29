@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { eq, and, desc, sql, gte } from "drizzle-orm";
 // Shinami and Aptos SDK removed - not applicable for Aleo
 import { db } from "./db";
-import { mintPulseToRecipient, verifyFaucetConfig } from "./aleo-service";
+import { mintPulseToRecipient, verifyFaucetConfig, getTokenBalance } from "./aleo-service";
 import {
   userProfiles,
   seasons,
@@ -3769,7 +3769,9 @@ To enable AI insights, configure the OpenAI API key in your environment.`;
         || req.socket.remoteAddress
         || "unknown";
 
-      // Check for existing claim in the last 24 hours
+      // TEMPORARILY DISABLED: Check for existing claim in the last 24 hours
+      // TODO: Re-enable rate limiting before production
+      /*
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
       const [existingClaim] = await db
@@ -3796,7 +3798,9 @@ To enable AI insights, configure the OpenAI API key in your environment.`;
           },
         });
       }
+      */
 
+      // Rate limiting temporarily disabled - always allow claims
       res.json({
         success: true,
         data: {
@@ -3862,7 +3866,9 @@ To enable AI insights, configure the OpenAI API key in your environment.`;
         || req.socket.remoteAddress
         || "unknown";
 
-      // Check rate limit (24 hours per IP)
+      // TEMPORARILY DISABLED: Check rate limit (24 hours per IP)
+      // TODO: Re-enable rate limiting before production
+      /*
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
       const [existingClaim] = await db
@@ -3885,9 +3891,10 @@ To enable AI insights, configure the OpenAI API key in your environment.`;
           nextClaimTime: nextClaimTime.toISOString(),
         });
       }
+      */
 
       // Get PULSE token ID from environment
-      const pulseTokenId = process.env.VITE_PULSE_TOKEN_ID || "1field";
+      const pulseTokenId = process.env.PULSE_TOKEN_ID || "100field";
 
       // Mint PULSE tokens to the wallet
       console.log(`[faucet] Initiating mint for ${wallet}`);
@@ -3997,6 +4004,41 @@ To enable AI insights, configure the OpenAI API key in your environment.`;
     } catch (error) {
       console.error("Error recording faucet claim:", error);
       res.status(500).json({ success: false, error: "Failed to record faucet claim" });
+    }
+  });
+
+  // ============================================
+  // Token Balance Routes
+  // ============================================
+
+  /**
+   * GET /api/balance/:address
+   * Get token balances for an address
+   * Query params: tokenId (optional, defaults to PULSE token)
+   */
+  app.get("/api/balance/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const tokenId = (req.query.tokenId as string) || "100field";
+
+      if (!address || !address.startsWith("aleo1")) {
+        return res.status(400).json({ success: false, error: "Invalid Aleo address" });
+      }
+
+      const result = await getTokenBalance(address, tokenId);
+
+      res.json({
+        success: true,
+        data: {
+          address,
+          tokenId,
+          balance: result.balance,
+          exists: result.exists,
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching balance:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch balance" });
     }
   });
 

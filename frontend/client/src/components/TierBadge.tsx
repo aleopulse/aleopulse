@@ -97,7 +97,7 @@ export function TierBadge({ tier, showVoteLimit = false, showTooltip = true, siz
             <p className="text-muted-foreground">{voteLimit} votes per day</p>
             {pulseThreshold > 0 && (
               <p className="text-muted-foreground">
-                Requires {(pulseThreshold / 1e8).toLocaleString()} PULSE (wallet + staked)
+                Requires {(pulseThreshold / 1e6).toLocaleString()} PULSE (wallet + staked)
               </p>
             )}
           </div>
@@ -148,7 +148,7 @@ export function TierProgress({ currentTier, pulseBalance, stakedPulse = "0", str
       <div className="flex justify-between text-sm">
         <span className="text-muted-foreground">Next: {nextTierName}</span>
         <span className="font-mono text-xs">
-          {pulseNeeded > 0 ? `${(Number(pulseNeeded) / 1e8).toLocaleString()} PULSE needed` : "Ready!"}
+          {pulseNeeded > 0 ? `${(Number(pulseNeeded) / 1e6).toLocaleString()} PULSE needed` : "Ready!"}
         </span>
       </div>
       <div className="h-1.5 bg-muted rounded-full overflow-hidden">

@@ -50,7 +50,7 @@ function getMinterAccount(): Account {
  */
 export async function mintPulseToRecipient(
   recipientAddress: string,
-  tokenId: string = "1field"
+  tokenId: string = "100field"
 ): Promise<MintResult> {
   try {
     console.log(`[aleo-service] Minting PULSE to ${recipientAddress}`);
@@ -141,4 +141,68 @@ export function verifyFaucetConfig(): { configured: boolean; minterAddress: stri
     configured: true,
     minterAddress,
   };
+}
+
+/**
+ * Query token balance from token_registry.aleo
+ *
+ * The token_registry uses BHP256::hash_to_field(TokenOwner { account, token_id }) as the mapping key.
+ * Since we can't easily compute BHP256 hashes client-side, we use the Aleoscan indexer API
+ * which tracks balance updates from transactions.
+ */
+export async function getTokenBalance(
+  address: string,
+  tokenId: string = "100field"
+): Promise<{ balance: string; exists: boolean }> {
+  const aleoscanApi = process.env.ALEOSCAN_API_URL || "https://api.testnet.aleoscan.io/v2";
+
+  try {
+    // Try Aleoscan's mapping values endpoint which lists all entries
+    // and allows us to filter by value content
+    const response = await fetch(
+      `${aleoscanApi}/mapping/list_program_mapping_values/${TOKEN_REGISTRY_PROGRAM}/authorized_balances?limit=1000`
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      const results = data.result || [];
+
+      // Search for a balance entry matching the address and token ID
+      for (const entry of results) {
+        const value = entry.value || "";
+        // Balance struct format: { token_id: 100field, account: aleo1..., balance: 1000000u128, authorized_until: 4294967295u32 }
+        if (value.includes(`account: ${address}`) && value.includes(`token_id: ${tokenId}`)) {
+          const balanceMatch = value.match(/balance:\s*(\d+)u128/);
+          if (balanceMatch) {
+            return { balance: balanceMatch[1], exists: true };
+          }
+        }
+      }
+    }
+
+    // If not found in authorized_balances, try the regular balances mapping
+    const balancesResponse = await fetch(
+      `${aleoscanApi}/mapping/list_program_mapping_values/${TOKEN_REGISTRY_PROGRAM}/balances?limit=1000`
+    );
+
+    if (balancesResponse.ok) {
+      const data = await balancesResponse.json();
+      const results = data.result || [];
+
+      for (const entry of results) {
+        const value = entry.value || "";
+        if (value.includes(`account: ${address}`) && value.includes(`token_id: ${tokenId}`)) {
+          const balanceMatch = value.match(/balance:\s*(\d+)u128/);
+          if (balanceMatch) {
+            return { balance: balanceMatch[1], exists: true };
+          }
+        }
+      }
+    }
+
+    return { balance: "0", exists: false };
+  } catch (error) {
+    console.error("[aleo-service] Balance query error:", error);
+    return { balance: "0", exists: false };
+  }
 }

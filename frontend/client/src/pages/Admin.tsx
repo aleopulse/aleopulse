@@ -318,7 +318,7 @@ export default function Admin() {
                 <div>
                   <p className="font-medium">Total Fees Collected</p>
                   <p className="text-sm text-muted-foreground">
-                    {(platformConfig.totalFeesCollected / 1e8).toFixed(4)} MOVE
+                    {(platformConfig.totalFeesCollected / 1e6).toFixed(4)} MOVE
                   </p>
                 </div>
               </div>

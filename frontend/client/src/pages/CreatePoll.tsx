@@ -169,7 +169,7 @@ export default function CreatePoll() {
       const reward = parseFloat(rewardPerVoter) || 0;
       const target = parseInt(targetResponders) || 0;
       const netAmount = reward * target;
-      const grossAmount = netAmount > 0 ? Math.ceil((netAmount * 10000) / (10000 - PLATFORM_FEE_BPS) * 1e8) / 1e8 : 0;
+      const grossAmount = netAmount > 0 ? Math.ceil((netAmount * 10000) / (10000 - PLATFORM_FEE_BPS) * 1e6) / 1e6 : 0;
       const fee = grossAmount - netAmount;
 
       return {
@@ -183,8 +183,8 @@ export default function CreatePoll() {
     } else if (rewardType === REWARD_TYPE.EQUAL_SPLIT) {
       const gross = parseFloat(totalFund) || 0;
       const max = parseInt(maxResponders) || 0;
-      const fee = calculatePlatformFee(gross * 1e8) / 1e8;
-      const net = calculateNetAmount(gross * 1e8) / 1e8;
+      const fee = calculatePlatformFee(gross * 1e6) / 1e6;
+      const net = calculateNetAmount(gross * 1e6) / 1e6;
       const perVoter = max > 0 ? net / max : 0;
 
       return {
@@ -266,10 +266,10 @@ export default function CreatePoll() {
       // For fixed mode: reward_per_vote > 0, max_voters = target
       // For equal split: reward_per_vote = 0, max_voters = max responders
       const rewardPerVoteOctas = rewardType === REWARD_TYPE.FIXED_PER_VOTE
-        ? Math.floor(calculations.rewardPerVoter * 1e8)
+        ? Math.floor(calculations.rewardPerVoter * 1e6)
         : 0;
       const maxVoters = calculations.maxVoters;
-      const fundAmountOctas = Math.floor(calculations.grossAmount * 1e8);
+      const fundAmountOctas = Math.floor(calculations.grossAmount * 1e6);
 
       const result = await createPoll({
         title: title.trim(),

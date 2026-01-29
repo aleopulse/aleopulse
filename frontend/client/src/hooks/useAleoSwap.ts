@@ -227,9 +227,9 @@ export function calculateTVL(
   if (!poolState) return 0;
 
   const pulseValue =
-    (Number(poolState.pulseReserve) / 1e8) * pulsePrice; // 8 decimals
+    (Number(poolState.pulseReserve) / 1e6) * pulsePrice; // 6 decimals
   const stableValue =
-    (Number(poolState.stableReserve) / 1e8) * stablePrice; // Assuming 8 decimals
+    (Number(poolState.stableReserve) / 1e6) * stablePrice; // 6 decimals
 
   return pulseValue + stableValue;
 }

@@ -1,6 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { UserPreferencesProvider, useUserPreferences } from "@/contexts/UserPreferencesContext";
 import { Loader2 } from "lucide-react";
@@ -9,6 +9,7 @@ function OnboardingContent() {
   const { connected } = useWallet();
   const { isOnboardingComplete, isLoading } = useUserPreferences();
   const [, setLocation] = useLocation();
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   // Redirect if not connected
   useEffect(() => {
@@ -17,12 +18,16 @@ function OnboardingContent() {
     }
   }, [connected, setLocation]);
 
-  // Redirect if already completed onboarding
+  // Redirect only if user was already onboarded when they navigated here.
+  // Don't redirect after just completing onboarding — the context handles that navigation.
   useEffect(() => {
-    if (!isLoading && isOnboardingComplete) {
-      setLocation("/");
+    if (!isLoading && !initialCheckDone) {
+      setInitialCheckDone(true);
+      if (isOnboardingComplete) {
+        setLocation("/");
+      }
     }
-  }, [isLoading, isOnboardingComplete, setLocation]);
+  }, [isLoading, isOnboardingComplete, initialCheckDone, setLocation]);
 
   if (isLoading) {
     return (

@@ -74,33 +74,40 @@ async function getCreditsBalance(
 }
 
 /**
- * Fetch token balance from token_registry
- * Tokens are registered in token_registry.aleo with public balances
+ * Fetch token balance from token_registry via backend API
+ *
+ * The token_registry uses BHP256::hash_to_field(TokenOwner { account, token_id }) as mapping keys,
+ * which we can't easily compute client-side. The backend API handles this by scanning the indexed
+ * mapping values from Aleoscan.
  */
 async function getTokenBalance(
   address: string,
   tokenId: string,
   coinTypeId: CoinTypeId,
-  explorerApiUrl: string,
-  provableApiUrl: string
+  _explorerApiUrl: string,
+  _provableApiUrl: string
 ): Promise<AccountBalance> {
   const symbol = getCoinSymbol(coinTypeId);
 
   try {
-    const indexer = createIndexer(explorerApiUrl, provableApiUrl);
+    // Use backend API which can properly query token_registry balances
+    const response = await fetch(`/api/balance/${address}?tokenId=${encodeURIComponent(tokenId)}`);
 
-    // token_registry uses: balances mapping with key = hash(token_id, address)
-    // For public balances, query the authorized_balances mapping
-    // Key format: (token_id, address) -> u128
-    const key = `${tokenId}_${address}`;
+    if (!response.ok) {
+      if (response.status === 404) {
+        return {
+          balance: 0n,
+          balanceFormatted: "0.0000",
+          exists: false,
+          symbol,
+        };
+      }
+      throw new Error(`Failed to fetch balance: ${response.status}`);
+    }
 
-    const balanceStr = await indexer.getMappingValue(
-      "token_registry.aleo",
-      "authorized_balances",
-      key
-    );
+    const result = await response.json();
 
-    if (!balanceStr) {
+    if (!result.success || !result.data.exists) {
       return {
         balance: 0n,
         balanceFormatted: "0.0000",
@@ -109,8 +116,7 @@ async function getTokenBalance(
       };
     }
 
-    // Parse the balance (u128 format)
-    const balance = BigInt(balanceStr.replace("u128", ""));
+    const balance = BigInt(result.data.balance);
 
     return {
       balance,
@@ -147,7 +153,7 @@ export async function getAccountBalance(
   const actualTokenId =
     tokenId ||
     (coinTypeId === COIN_TYPES.PULSE
-      ? import.meta.env.VITE_PULSE_TOKEN_ID || "1field"
+      ? import.meta.env.VITE_PULSE_TOKEN_ID || "100field"
       : import.meta.env.VITE_STABLE_TOKEN_ID || "2field");
 
   return getTokenBalance(address, actualTokenId, coinTypeId, explorerApiUrl, provableApiUrl);
@@ -179,7 +185,7 @@ export async function getAllBalances(
  */
 export function formatBalance(
   smallestUnit: bigint | number,
-  tokenDecimals: number = 8,
+  tokenDecimals: number = 6,
   displayDecimals: number = 4
 ): string {
   const amount =
@@ -198,7 +204,7 @@ export function formatBalance(
 /**
  * Parse token amount to smallest unit
  */
-export function parseToSmallestUnit(amount: number, decimals: number = 8): bigint {
+export function parseToSmallestUnit(amount: number, decimals: number = 6): bigint {
   return BigInt(Math.floor(amount * 10 ** decimals));
 }
 

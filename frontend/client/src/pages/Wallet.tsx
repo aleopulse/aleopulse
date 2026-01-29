@@ -32,7 +32,7 @@ import {
   Clock,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { getAllBalances, type AllBalances, parseToSmallestUnit } from "@/lib/balance";
@@ -558,7 +558,7 @@ export default function WalletPage() {
                       </div>
                       {event.type === 'reward_claimed' && event.amount && (
                         <Badge variant="secondary" className="bg-green-500/10 text-green-600">
-                          +{(event.amount / 1e8).toFixed(2)} PULSE
+                          +{(event.amount / 1e6).toFixed(2)} PULSE
                         </Badge>
                       )}
                       {event.type === 'vote' && (
@@ -709,13 +709,13 @@ export default function WalletPage() {
                       <div className="p-2 rounded-lg bg-muted/50">
                         <p className="text-xs text-muted-foreground">Staked</p>
                         <p className="font-mono font-bold">
-                          {(totalStaked / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          {(totalStaked / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                         </p>
                       </div>
                       <div className="p-2 rounded-lg bg-muted/50">
                         <p className="text-xs text-muted-foreground">Unlockable</p>
                         <p className="font-mono font-bold text-green-600">
-                          {(unlockableAmount / 1e8).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          {(unlockableAmount / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                         </p>
                       </div>
                     </div>

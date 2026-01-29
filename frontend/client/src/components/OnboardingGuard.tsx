@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 import { useOnboardingStatus } from "@/hooks/useUserPreferences";
 import { SimplifiedOnboardingModal } from "@/components/onboarding/SimplifiedOnboardingModal";
 import { Loader2 } from "lucide-react";
@@ -10,8 +10,8 @@ interface OnboardingGuardProps {
 }
 
 export function OnboardingGuard({ children }: OnboardingGuardProps) {
-  const { publicKey, connected } = useWallet();
-  const { data: status, isLoading } = useOnboardingStatus(publicKey || undefined);
+  const { address, connected } = useWallet();
+  const { data: status, isLoading } = useOnboardingStatus(address || undefined);
   const [, setLocation] = useLocation();
   const [showSimplifiedModal, setShowSimplifiedModal] = useState(false);
   const [hasChecked, setHasChecked] = useState(false);
@@ -39,7 +39,7 @@ export function OnboardingGuard({ children }: OnboardingGuardProps) {
   useEffect(() => {
     setHasChecked(false);
     setShowSimplifiedModal(false);
-  }, [publicKey]);
+  }, [address]);
 
   const handleCustomize = () => {
     setShowSimplifiedModal(false);

@@ -23,7 +23,7 @@ export function getTokenId(coinTypeId: CoinTypeId): string {
     case COIN_TYPES.CREDITS:
       return "0field"; // Native credits don't use token_registry
     case COIN_TYPES.PULSE:
-      return import.meta.env.VITE_PULSE_TOKEN_ID || "1field";
+      return import.meta.env.VITE_PULSE_TOKEN_ID || "100field";
     case COIN_TYPES.STABLE:
       return import.meta.env.VITE_STABLE_TOKEN_ID || "2field";
     default:
@@ -71,11 +71,11 @@ export function getCoinDecimals(coinTypeId: CoinTypeId): number {
     case COIN_TYPES.CREDITS:
       return 6; // Aleo credits use 6 decimals (microcredits)
     case COIN_TYPES.PULSE:
-      return 8; // PULSE uses 8 decimals
+      return 6; // PULSE uses 6 decimals (matches token_registry registration)
     case COIN_TYPES.STABLE:
       return 6; // USDC uses 6 decimals
     default:
-      return 8;
+      return 6;
   }
 }
 
@@ -103,7 +103,7 @@ export const COIN_METADATA: Record<
     id: COIN_TYPES.PULSE,
     symbol: "PULSE",
     name: "Pulse Token",
-    decimals: 8,
+    decimals: 6,
     description: "LeoPulse governance and rewards token",
   },
   [COIN_TYPES.STABLE]: {

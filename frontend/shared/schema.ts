@@ -28,12 +28,12 @@ export const TIER_VOTE_LIMITS = {
   [TIERS.PLATINUM]: 12,
 } as const;
 
-// PULSE thresholds for tier calculation (in octas, 1e8 = 1 PULSE)
+// PULSE thresholds for tier calculation (in smallest units, 1e6 = 1 PULSE)
 export const TIER_PULSE_THRESHOLDS = {
   [TIERS.BRONZE]: 0,
-  [TIERS.SILVER]: 1000 * 1e8,    // 1,000 PULSE
-  [TIERS.GOLD]: 10000 * 1e8,     // 10,000 PULSE
-  [TIERS.PLATINUM]: 100000 * 1e8, // 100,000 PULSE
+  [TIERS.SILVER]: 1000 * 1e6,    // 1,000 PULSE
+  [TIERS.GOLD]: 10000 * 1e6,     // 10,000 PULSE
+  [TIERS.PLATINUM]: 100000 * 1e6, // 100,000 PULSE
 } as const;
 
 export const QUEST_TYPES = {

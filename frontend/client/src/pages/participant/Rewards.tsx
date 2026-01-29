@@ -98,9 +98,9 @@ export default function Rewards() {
   const totals = useMemo(() => {
     const pending = claimablePolls.reduce((sum, p) => {
       const perVoter = p.reward_per_vote > 0
-        ? p.reward_per_vote / 1e8
+        ? p.reward_per_vote / 1e6
         : p.totalVotes > 0
-        ? (p.reward_pool / 1e8) / p.totalVotes
+        ? (p.reward_pool / 1e6) / p.totalVotes
         : 0;
       return sum + perVoter;
     }, 0);
@@ -251,9 +251,9 @@ export default function Rewards() {
             <div className="space-y-3">
               {claimablePolls.map((poll) => {
                 const perVoter = poll.reward_per_vote > 0
-                  ? poll.reward_per_vote / 1e8
+                  ? poll.reward_per_vote / 1e6
                   : poll.totalVotes > 0
-                  ? (poll.reward_pool / 1e8) / poll.totalVotes
+                  ? (poll.reward_pool / 1e6) / poll.totalVotes
                   : 0;
                 const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
 
@@ -315,9 +315,9 @@ export default function Rewards() {
             <div className="divide-y divide-border/50">
               {claimedPolls.map((poll) => {
                 const perVoter = poll.reward_per_vote > 0
-                  ? poll.reward_per_vote / 1e8
+                  ? poll.reward_per_vote / 1e6
                   : poll.totalVotes > 0
-                  ? (poll.reward_pool / 1e8) / poll.totalVotes
+                  ? (poll.reward_pool / 1e6) / poll.totalVotes
                   : 0;
                 const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
 

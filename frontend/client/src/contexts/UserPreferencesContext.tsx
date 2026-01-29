@@ -5,7 +5,7 @@ import {
   useMemo,
   ReactNode,
 } from "react";
-import { useWallet } from "@demox-labs/aleo-wallet-adapter-react";
+import { useWallet } from "@provablehq/aleo-wallet-adaptor-react";
 import { useLocation } from "wouter";
 import {
   usePreferences,
@@ -51,19 +51,19 @@ interface UserPreferencesProviderProps {
 }
 
 export function UserPreferencesProvider({ children }: UserPreferencesProviderProps) {
-  const { publicKey, connected } = useWallet();
+  const { address, connected } = useWallet();
   const [, setLocation] = useLocation();
 
   // Queries
   const {
     data: preferences,
     isLoading: isLoadingPreferences,
-  } = usePreferences(publicKey || undefined);
+  } = usePreferences(address || undefined);
 
   const {
     data: onboardingStatus,
     isLoading: isLoadingStatus,
-  } = useOnboardingStatus(publicKey || undefined);
+  } = useOnboardingStatus(address || undefined);
 
   // Mutations
   const switchProfileMutation = useSwitchProfile();
@@ -80,18 +80,18 @@ export function UserPreferencesProvider({ children }: UserPreferencesProviderPro
 
   // Actions
   const switchProfile = async (profile: ProfileType) => {
-    if (!publicKey) return;
+    if (!address) return;
     await switchProfileMutation.mutateAsync({
-      walletAddress: publicKey,
+      walletAddress: address,
       profile,
     });
   };
 
   const completeOnboarding = async (data: Omit<OnboardingData, "walletAddress">) => {
-    if (!publicKey) return;
+    if (!address) return;
     const result = await completeOnboardingMutation.mutateAsync({
       ...data,
-      walletAddress: publicKey,
+      walletAddress: address,
     });
     // Navigate to the appropriate dashboard after completion
     if (result.activeProfile) {
@@ -103,9 +103,9 @@ export function UserPreferencesProvider({ children }: UserPreferencesProviderPro
   };
 
   const updatePreferences = async (updates: Partial<UserPreferences>) => {
-    if (!publicKey) return;
+    if (!address) return;
     await updatePreferencesMutation.mutateAsync({
-      address: publicKey,
+      address: address,
       updates,
     });
   };
@@ -142,7 +142,7 @@ export function UserPreferencesProvider({ children }: UserPreferencesProviderPro
       isOnboardingComplete,
       hasExistingActivity,
       suggestedProfile,
-      publicKey,
+      address,
     ]
   );
 

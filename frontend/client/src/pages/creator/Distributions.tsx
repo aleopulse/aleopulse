@@ -95,7 +95,7 @@ export default function Distributions() {
     const pendingByToken: Record<string, number> = {};
     pendingDistributions.forEach((p) => {
       const coinSymbol = getCoinSymbol(p.coin_type_id as CoinTypeId);
-      pendingByToken[coinSymbol] = (pendingByToken[coinSymbol] || 0) + (p.reward_pool / 1e8);
+      pendingByToken[coinSymbol] = (pendingByToken[coinSymbol] || 0) + (p.reward_pool / 1e6);
     });
 
     // Group distributed by token
@@ -104,7 +104,7 @@ export default function Distributions() {
       .filter((p) => p.rewards_distributed)
       .forEach((p) => {
         const coinSymbol = getCoinSymbol(p.coin_type_id as CoinTypeId);
-        distributedByToken[coinSymbol] = (distributedByToken[coinSymbol] || 0) + (p.reward_pool / 1e8);
+        distributedByToken[coinSymbol] = (distributedByToken[coinSymbol] || 0) + (p.reward_pool / 1e6);
       });
 
     return {
@@ -253,7 +253,7 @@ export default function Distributions() {
           ) : (
             <div className="space-y-3">
               {pendingDistributions.map((poll) => {
-                const rewardPool = poll.reward_pool / 1e8;
+                const rewardPool = poll.reward_pool / 1e6;
                 const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
                 const perVoter = poll.totalVotes > 0 ? rewardPool / poll.totalVotes : 0;
 
@@ -319,7 +319,7 @@ export default function Distributions() {
           ) : (
             <div className="divide-y divide-border/50">
               {claimingPolls.map((poll) => {
-                const rewardPool = poll.reward_pool / 1e8;
+                const rewardPool = poll.reward_pool / 1e6;
                 const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
                 const claimedCount = poll.claimed.length;
 
@@ -378,7 +378,7 @@ export default function Distributions() {
               {completedDistributions
                 .filter((p) => p.rewards_distributed)
                 .map((poll) => {
-                  const rewardPool = poll.reward_pool / 1e8;
+                  const rewardPool = poll.reward_pool / 1e6;
                   const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
 
                   return (

@@ -100,9 +100,9 @@ export default function DonorFunded() {
 
   // Render poll card with contribution badge
   const renderFundedPollCard = ({ poll, contribution }: { poll: PollWithMeta; contribution: { total: number; coinTypeId: number } }) => {
-    const rewardPool = poll.reward_pool / 1e8;
+    const rewardPool = poll.reward_pool / 1e6;
     const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
-    const contributionAmount = contribution.total / 1e8;
+    const contributionAmount = contribution.total / 1e6;
 
     return (
       <div key={poll.id} className="relative">

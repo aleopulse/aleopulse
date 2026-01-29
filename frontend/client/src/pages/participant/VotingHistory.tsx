@@ -220,9 +220,9 @@ export default function VotingHistory() {
             ) : (
               <div className="divide-y divide-border/50">
                 {filteredPolls.map((poll) => {
-                  const rewardPoolMove = poll.reward_pool / 1e8;
+                  const rewardPoolMove = poll.reward_pool / 1e6;
                   const perVoter = poll.reward_per_vote > 0
-                    ? poll.reward_per_vote / 1e8
+                    ? poll.reward_per_vote / 1e6
                     : poll.totalVotes > 0
                     ? rewardPoolMove / poll.totalVotes
                     : 0;

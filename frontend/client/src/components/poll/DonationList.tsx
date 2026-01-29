@@ -39,7 +39,7 @@ function DonorRow({
   coinSymbol: string;
   explorerUrl?: string;
 }) {
-  const amount = donation.amount / 1e8;
+  const amount = donation.amount / 1e6;
 
   return (
     <div className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-muted/30 transition-colors">
@@ -111,7 +111,7 @@ export function DonationList({
   const summaryItems = useMemo(() => [
     {
       label: "Total Donated",
-      value: `${(totalAmount / 1e8).toFixed(4)} ${coinSymbol}`,
+      value: `${(totalAmount / 1e6).toFixed(4)} ${coinSymbol}`,
       icon: <Coins className="w-4 h-4" />,
     },
     {
@@ -185,7 +185,7 @@ export function DonationList({
             Donations
           </CardTitle>
           <Badge variant="outline" className="font-mono">
-            {(totalAmount / 1e8).toFixed(2)} {coinSymbol}
+            {(totalAmount / 1e6).toFixed(2)} {coinSymbol}
           </Badge>
         </div>
       </CardHeader>

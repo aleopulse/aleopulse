@@ -52,9 +52,9 @@ export function UnifiedActivityDashboard({
     polls.forEach((poll) => {
       const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
       const rewardPerVoter = poll.reward_per_vote > 0
-        ? poll.reward_per_vote / 1e8
+        ? poll.reward_per_vote / 1e6
         : poll.totalVotes > 0
-        ? (poll.reward_pool / 1e8) / poll.totalVotes
+        ? (poll.reward_pool / 1e6) / poll.totalVotes
         : 0;
 
       // Check if user created this poll
@@ -65,7 +65,7 @@ export function UnifiedActivityDashboard({
           pollId: poll.id,
           pollTitle: poll.title,
           timestamp: poll.end_time - 86400, // Approximate creation time
-          amount: poll.reward_pool / 1e8,
+          amount: poll.reward_pool / 1e6,
           tokenSymbol: coinSymbol,
         });
       }

@@ -83,7 +83,7 @@ export default function CreatorDashboard() {
       // Skip MOVE (coin_type_id = 0), only aggregate PULSE and USDC
       if (p.coin_type_id === COIN_TYPES.MOVE) return;
       const coinSymbol = getCoinSymbol(p.coin_type_id as CoinTypeId);
-      fundedByToken[coinSymbol] = (fundedByToken[coinSymbol] || 0) + (p.reward_pool / 1e8);
+      fundedByToken[coinSymbol] = (fundedByToken[coinSymbol] || 0) + (p.reward_pool / 1e6);
     });
 
     return {
@@ -104,7 +104,7 @@ export default function CreatorDashboard() {
 
   // Render poll card
   const renderPollCard = (poll: PollWithMeta) => {
-    const rewardPool = poll.reward_pool / 1e8;
+    const rewardPool = poll.reward_pool / 1e6;
     const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
     return (
       <PollCard
