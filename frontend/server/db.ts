@@ -8,7 +8,13 @@ if (!process.env.DATABASE_URL) {
 }
 
 // Create postgres.js client (works with Supabase, Neon, or any PostgreSQL)
-const sql = postgres(process.env.DATABASE_URL);
+// SSL is required for cloud providers like Neon in production
+const sql = postgres(process.env.DATABASE_URL, {
+  ssl: process.env.NODE_ENV === "production" ? "require" : false,
+  max: 10,
+  idle_timeout: 20,
+  connect_timeout: 10,
+});
 
 // Create Drizzle instance with schema
 export const db = drizzle(sql, { schema });
