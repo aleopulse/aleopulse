@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const REFERRAL_STORAGE_KEY = "mvpulse_referral_code";
+const REFERRAL_STORAGE_KEY = "leopulse_referral_code";
 
 /**
  * Hook to detect and store referral code from URL

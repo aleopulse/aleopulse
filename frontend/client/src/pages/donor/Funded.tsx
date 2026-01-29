@@ -18,7 +18,7 @@ import type { PollWithMeta } from "@/types/poll";
 import { getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
 
 // Local storage key for tracking user's fundings
-const FUNDING_HISTORY_KEY = "mvpulse_funding_history";
+const FUNDING_HISTORY_KEY = "leopulse_funding_history";
 
 interface FundingRecord {
   pollId: number;

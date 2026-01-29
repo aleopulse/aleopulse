@@ -3,7 +3,7 @@ import { useTour } from "@/contexts/TourContext";
 import { getTourSteps } from "@/lib/tourSteps";
 import { useCallback, useMemo } from "react";
 
-// Custom styles matching MVPulse theme
+// Custom styles matching LeoPulse theme
 const joyrideStyles = {
   options: {
     arrowColor: "hsl(var(--card))",

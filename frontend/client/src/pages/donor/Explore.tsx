@@ -34,7 +34,7 @@ import { showTransactionSuccessToast, showTransactionErrorToast } from "@/lib/tr
 import { DonationDialog } from "@/components/poll/DonationDialog";
 
 // Local storage key for tracking user's fundings
-const FUNDING_HISTORY_KEY = "mvpulse_funding_history";
+const FUNDING_HISTORY_KEY = "leopulse_funding_history";
 
 interface FundingRecord {
   pollId: number;
