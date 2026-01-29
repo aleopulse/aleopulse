@@ -6,11 +6,13 @@ Leo smart contracts for the LeoPulse platform on Aleo blockchain.
 
 ```
 contracts/
-└── aleo/
-    ├── poll/      # Polls with configurable privacy modes
-    ├── pulse/     # PULSE token wrapper with testnet faucet
-    ├── staking/   # PULSE staking with lock periods
-    └── swap/      # PULSE/Stablecoin AMM (constant product)
+├── poll/      # Polls with configurable privacy modes
+├── pulse/     # PULSE token wrapper with testnet faucet
+├── staking/   # PULSE staking with lock periods
+├── swap/      # PULSE/Stablecoin AMM (constant product)
+├── scripts/   # Helper utilities for token operations
+├── Makefile   # Build and deploy commands
+└── .env       # Private key configuration
 ```
 
 ## Programs
@@ -29,7 +31,7 @@ contracts/
    curl -L https://raw.githubusercontent.com/ProvableHQ/leo/mainnet/install.sh | sh
    ```
 
-2. Configure your private key in `aleo/.env`:
+2. Configure your private key in `.env`:
    ```
    PRIVATE_KEY=APrivateKey1zkp...
    ```
@@ -39,7 +41,7 @@ contracts/
 ## Commands
 
 ```bash
-cd contracts/aleo
+cd contracts
 
 # Build all programs
 make build
