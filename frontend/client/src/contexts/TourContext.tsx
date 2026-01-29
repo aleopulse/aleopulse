@@ -23,9 +23,9 @@ const TourContext = createContext<TourContextType | undefined>(undefined);
 
 // localStorage keys
 const TOUR_STORAGE_KEYS = {
-  creator: "mvpulse_tour_completed_creator",
-  participant: "mvpulse_tour_completed_participant",
-  donor: "mvpulse_tour_completed_donor",
+  creator: "leopulse_tour_completed_creator",
+  participant: "leopulse_tour_completed_participant",
+  donor: "leopulse_tour_completed_donor",
 } as const;
 
 interface TourProviderProps {

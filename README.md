@@ -1,6 +1,6 @@
-# MVPulse
+# LeoPulse
 
-A decentralized polling and rewards platform built on Movement Network. Create polls, vote, and earn rewards in MOVE, PULSE, or USDC tokens.
+A privacy-preserving polling and rewards platform built on Aleo. Create polls with configurable privacy modes, vote anonymously with zero-knowledge proofs, and earn PULSE token rewards.
 
 **Live Demo:** [aleopulse.onrender.com](https://aleopulse.onrender.com)
 
@@ -19,66 +19,55 @@ A decentralized polling and rewards platform built on Movement Network. Create p
 | [Roadmap](docs/ROADMAP.md) | Future plans and vision |
 | [Security](docs/SECURITY.md) | Security considerations |
 
-### Checkpoints
-- [Checkpoint 1](01_checkpoint.md) - Initial development
-- [Checkpoint 2](02_checkpoint.md) - Core features complete
-- [Checkpoint 3](03_checkpoint.md) - Latest features (Questionnaires, Staking, Projects, Referrals)
-
 ## Project Structure
 
 ```
-mvpulse/
-├── frontend/          # React + Vite dApp with wallet connection
-└── contracts/         # Move smart contracts
-    ├── pulse/         # PULSE token (Fungible Asset)
-    ├── poll/          # Polling system with rewards
-    ├── swap/          # PULSE/USDC AMM swap
-    └── staking/       # PULSE staking for tier qualification
+leopulse/
+├── frontend/              # React + Vite dApp with wallet connection
+│   ├── client/src/        # React 19 frontend
+│   ├── server/            # Express backend
+│   └── db/                # Drizzle ORM schema
+├── contracts/aleo/        # Leo smart contracts
+│   ├── poll/              # Core polling logic (privacy modes, voting, rewards)
+│   ├── pulse/             # Platform token/points
+│   ├── staking/           # Staking mechanics
+│   └── swap/              # Token swap functionality
+└── docs/                  # Project documentation
 ```
 
 ## Deployed Contracts (Testnet)
 
-| Package | Address | Module |
-|---------|---------|--------|
-| **pulse** | `0x69c7c6752b3426e00fec646270e5b7e9f0efa18bddbd7f112a8e84f7fbe3f737` | `pulse::pulse` |
-| **poll** | `0x4a3593c9631d8686a00b72eaf4da8341947386c6ced38513fb5a88a63aa10cde` | `poll::poll` |
-| **swap** | `0x55872704413ffc43bb832df7eb14c0665c9ae401897077a262d56e2de37d2b7e` | `swap::swap` |
-| **staking** | `0xa317fa282be3423cd8378b818f04ba9492981d955206ed2a46eff281be8aa55f` | `staking::staking` |
+| Program | Description |
+|---------|-------------|
+| `leopulse_poll_v2.aleo` | Core polling with privacy modes, rewards, and invites |
 
 ## Features
 
-### Polling System
-- Create polls with MOVE, PULSE, or USDC rewards
-- Multiple reward distribution modes (Fixed per vote, Equal split)
-- Platform fee (2%) for sustainability
+### Privacy-Preserving Polling
+- **Anonymous Mode**: Zero-knowledge voting with cryptographic privacy
+- **Semi-Private Mode**: Votes hidden by default, optionally revealable
+- **Identified Mode**: Public voting for transparent governance
+- **Private Polls**: Invite-only polls with `PollInvite` records
+
+### Poll Lifecycle
+- Create polls with PULSE token rewards
+- Full lifecycle: ACTIVE → CLAIMING → CLOSED → FINALIZED
 - Manual claim (MANUAL_PULL) or creator distribution (MANUAL_PUSH)
-- Full poll lifecycle: ACTIVE → CLAIMING → CLOSED → FINALIZED
-- Bulk voting for questionnaires (single transaction)
+- Platform fee (2%) for sustainability
 
 ### Questionnaires
 - Bundle multiple polls into surveys
 - Shared reward pools with auto-calculation
 - Progress tracking for participants
-- Bulk vote recording (atomic transaction)
+- Bulk vote recording
 
 ### PULSE Token
-- Fixed supply Fungible Asset (FA) token
-- 1 billion max supply
+- Platform utility token on Aleo
 - Testnet faucet for development
-
-### Token Swap
-- AMM-based PULSE/USDC swap
-- Constant product (x*y=k) market maker
-- Liquidity provision with LP shares
-
-### PULSE Staking
-- Lock PULSE tokens for fixed periods (7, 14, 21, 30, 90, 180, or 365 days)
-- Staking counts towards tier qualification (wallet balance + staked = tier)
-- Multiple stake positions with different lock periods
-- Unstake anytime after lock period expires
+- Token rewards for participation
 
 ### Tier System
-Users earn tiers based on their total PULSE holdings (wallet + staked):
+Users earn tiers based on their total PULSE holdings:
 
 | Tier | PULSE Required | Daily Votes |
 |------|----------------|-------------|
@@ -110,7 +99,7 @@ Users earn tiers based on their total PULSE holdings (wallet + staked):
 
 ## Frontend
 
-The frontend is a React + Vite application with wallet connection support.
+The frontend is a React 19 + Vite application with Aleo wallet support.
 
 ### Setup
 
@@ -120,93 +109,78 @@ npm install
 npm run dev
 ```
 
-The app will be available at `http://localhost:5173`.
+The app will be available at `http://localhost:5000`.
 
 ### Features
 
-- Multi-wallet support (Petra, Nightly, Martian, Pontem)
-- Privy embedded wallets (social login: Email, Google, Discord)
-- Movement Network testnet and mainnet support
+- Leo Wallet and Shield Wallet support
+- Aleo testnet and mainnet support
 - PULSE faucet for testnet
-- Poll creation with MOVE/PULSE/USDC rewards
+- Poll creation with privacy mode selection
 - Questionnaire creation with shared reward pools
-- Token swap interface (PULSE/USDC AMM)
-- PULSE staking dashboard with tier progression
 - Project organization with team collaboration
 - Referral dashboard with milestone tracking
 - Quest system with seasonal competitions
-- Gas sponsorship via Shinami
 
 ### Environment Variables
 
 Create a `.env` file in the `frontend/` directory:
 
 ```env
-# Testnet Contract Addresses
-VITE_TESTNET_CONTRACT_ADDRESS=0x4a3593c9631d8686a00b72eaf4da8341947386c6ced38513fb5a88a63aa10cde
-VITE_TESTNET_PULSE_CONTRACT_ADDRESS=0x69c7c6752b3426e00fec646270e5b7e9f0efa18bddbd7f112a8e84f7fbe3f737
-VITE_TESTNET_PULSE_METADATA_ADDRESS=0x4c7028f47b62b952c11bbeb0ba209523b0e3d54205c085752905bcccd35f2f03
-VITE_TESTNET_SWAP_CONTRACT_ADDRESS=0x55872704413ffc43bb832df7eb14c0665c9ae401897077a262d56e2de37d2b7e
-VITE_TESTNET_STAKING_CONTRACT_ADDRESS=0xa317fa282be3423cd8378b818f04ba9492981d955206ed2a46eff281be8aa55f
-VITE_TESTNET_USDC_CONTRACT_ADDRESS=0xb89077cfd2a82a0c1450534d49cfd5f2707643155273069bc23a912bcfefdee7
+# Aleo Configuration
+VITE_ALEO_NETWORK=testnet
+VITE_POLL_PROGRAM_ID=leopulse_poll_v2.aleo
+VITE_PULSE_TOKEN_ID=100field
 
-# Database (Neon PostgreSQL)
+# Database (PostgreSQL)
 DATABASE_URL=postgresql://...
 
-# Privy (for embedded wallets)
-VITE_PRIVY_APP_ID=your_privy_app_id
-
-# Shinami Gas Sponsorship
-SHINAMI_GAS_KEY_TESTNET=your_shinami_testnet_key
+# Faucet Minting (optional)
+FAUCET_MINTER_PRIVATE_KEY=APrivateKey1...
 ```
 
 ## Contracts
 
-See [contracts/README.md](contracts/README.md) for detailed contract documentation.
+Leo smart contracts for Aleo blockchain.
 
 ### Quick Start
 
 ```bash
-# Compile all packages
-cd contracts/pulse && movement move compile
-cd contracts/poll && movement move compile
-cd contracts/swap && movement move compile
-cd contracts/staking && movement move compile
+# Build contracts
+cd contracts/aleo/poll && leo build
+
+# Run contract functions locally
+cd contracts/aleo/poll && leo run <function> <args>
 
 # Deploy (requires funded account)
-cd contracts/pulse && movement move publish --assume-yes
-cd contracts/poll && movement move publish --assume-yes
-cd contracts/swap && movement move publish --assume-yes
-cd contracts/staking && movement move publish --assume-yes
+snarkos developer deploy leopulse_poll_v2.aleo --private-key <key> --query "https://api.explorer.provable.com/v1" --broadcast "https://api.explorer.provable.com/v1/testnet/transaction/broadcast" --fee 1000000
 ```
 
 ## Networks
 
-| Network | Chain ID | RPC URL |
-|---------|----------|---------|
-| Mainnet | 126 | https://full.mainnet.movementinfra.xyz/v1 |
-| Testnet | 250 | https://testnet.movementnetwork.xyz/v1 |
+| Network | Explorer |
+|---------|----------|
+| Mainnet | https://explorer.aleo.org |
+| Testnet | https://testnet.aleoscan.io |
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
-| Blockchain | Movement Network (Aptos Move) |
-| Smart Contracts | Move Language |
-| Frontend | React + TypeScript + Vite |
+| Blockchain | Aleo (Zero-Knowledge) |
+| Smart Contracts | Leo Language |
+| Frontend | React 19 + TypeScript + Vite |
 | Backend | Express.js + Drizzle ORM |
-| Database | PostgreSQL (Neon) |
-| Styling | TailwindCSS + shadcn/ui |
-| Wallet | Privy + Petra/Nightly/Martian |
-| Gas Sponsorship | Shinami Gas Station |
+| Database | PostgreSQL (Neon/Supabase) |
+| Styling | TailwindCSS 4 + shadcn/ui |
+| Wallet | Leo Wallet, Shield Wallet |
 
 ## Resources
 
-- [Movement Docs](https://docs.movementnetwork.xyz)
-- [Move Language Book](https://move-language.github.io/move/)
-- [Privy Documentation](https://docs.privy.io)
-- [Shinami Documentation](https://docs.shinami.com)
+- [Aleo Developer Docs](https://developer.aleo.org/)
+- [Leo Language Guide](https://developer.aleo.org/leo/)
+- [Aleo Explorer](https://explorer.aleo.org/)
 
 ---
 
-*Built for the Encode x Movement M1 Hackathon*
+*Built for privacy-first decentralized governance*

@@ -1,5 +1,5 @@
 /**
- * Event fetching utilities for MVPulse
+ * Event fetching utilities for LeoPulse
  * Uses Aleo Indexer GraphQL API to fetch user activity
  */
 

@@ -1,11 +1,11 @@
 /**
- * Feature flags for MVPulse
+ * Feature flags for LeoPulse
  * Uses localStorage for persistence across sessions
  */
 
 export const FEATURE_FLAGS = {
   /** Use indexer optimization for faster data retrieval */
-  USE_INDEXER_OPTIMIZATION: 'mvpulse-use-indexer-optimization',
+  USE_INDEXER_OPTIMIZATION: 'leopulse-use-indexer-optimization',
 } as const;
 
 /**

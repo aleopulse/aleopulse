@@ -50,8 +50,8 @@ const REWARD_TYPE_LABELS: Record<number, string> = {
 
 // Example prompts to show users
 const EXAMPLE_PROMPTS = [
-  "Create a poll asking what feature to build next on MVPulse with 10 PULSE split equally among 50 voters for 1 week",
-  "Generate a governance poll about treasury allocation with MOVE rewards",
+  "Create a poll asking what feature to build next on LeoPulse with 10 PULSE split equally among 50 voters for 1 week",
+  "Generate a governance poll about treasury allocation with PULSE rewards",
   "Make a quick 24-hour poll about community preferences with no rewards",
 ];
 

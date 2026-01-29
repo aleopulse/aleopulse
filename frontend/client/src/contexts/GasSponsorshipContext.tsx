@@ -30,7 +30,7 @@ interface GasSponsorshipContextType {
 
 const GasSponsorshipContext = createContext<GasSponsorshipContextType | null>(null);
 
-const LOCAL_STORAGE_KEY = "mvpulse-gas-sponsorship-enabled";
+const LOCAL_STORAGE_KEY = "leopulse-gas-sponsorship-enabled";
 
 export function GasSponsorshipProvider({ children }: { children: ReactNode }) {
   const { isConnected, address } = useWalletConnection();
