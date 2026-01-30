@@ -561,7 +561,6 @@ export default function ParticipantDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {availablePolls
-              .filter((p) => p.reward_pool > 0)
               .slice(0, 6)
               .map((poll) => renderPollCard(poll, false))}
           </div>
