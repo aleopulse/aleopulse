@@ -7,10 +7,14 @@
     "build": "remotion bundle",
     "render": "remotion render DemoVideo out/demo.mp4",
     "render:gif": "remotion render DemoVideo out/demo.gif --image-format=png",
+    "render:pitchdeck": "remotion render PitchDeck out/pitchdeck.mp4",
+    "render:pitchdeck:gif": "remotion render PitchDeck out/pitchdeck.gif --image-format=png",
     "thumbnail": "remotion still DemoVideo out/thumbnail.png --frame=0",
+    "thumbnail:pitchdeck": "remotion still PitchDeck out/pitchdeck-thumbnail.png --frame=0",
     "upgrade": "remotion upgrade",
     "lint": "eslint src && tsc",
-    "generate:voiceover": "npx tsx scripts/generate-voiceover.ts"
+    "generate:voiceover": "npx tsx scripts/generate-voiceover.ts",
+    "generate:voiceover:pitchdeck": "npx tsx scripts/generate-pitchdeck-voiceover.ts"
   },
   "repository": {},
   "license": "UNLICENSED",

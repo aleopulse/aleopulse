@@ -47,6 +47,13 @@ export function useAleoWallet() {
       }
 
       try {
+        console.log("[useAleoWallet] Executing transaction:", {
+          program: input.programId,
+          function: input.functionName,
+          inputs: input.inputs,
+          fee: input.fee || 100000,
+        });
+
         const result = await walletExecuteTransaction({
           program: input.programId,
           function: input.functionName,
@@ -54,9 +61,12 @@ export function useAleoWallet() {
           fee: input.fee || 100000, // Default fee: 0.1 credits
         });
 
+        console.log("[useAleoWallet] Transaction result:", result);
+        console.log("[useAleoWallet] Transaction ID:", result?.transactionId);
+
         return result?.transactionId ?? null;
       } catch (error) {
-        console.error("Transaction error:", error);
+        console.error("[useAleoWallet] Transaction error:", error);
         throw error;
       }
     },

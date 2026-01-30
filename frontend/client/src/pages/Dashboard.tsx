@@ -14,6 +14,7 @@ import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useBlockHeight } from "@/hooks/useAleoPolls";
+import { usePendingPolls, PENDING_POLL_STATUS, type PendingPoll } from "@/hooks/usePendingPolls";
 import type { PollWithMeta, PollSettings, PollInvite } from "@/types/poll";
 import { POLL_VISIBILITY } from "@/types/poll";
 import { getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
@@ -30,6 +31,12 @@ export default function Dashboard() {
   const { getAllPolls, getPollCount, contractAddress, getPollSettings, getUserPollInvites } = useContract();
   const { config } = useNetwork();
   const { data: currentBlock } = useBlockHeight();
+  const { pendingPolls, confirmPendingPoll, dismissPendingPoll, fetchPendingPolls } = usePendingPolls();
+
+  // Debug: log pending polls state
+  useEffect(() => {
+    console.log("[Dashboard] pendingPolls state:", pendingPolls);
+  }, [pendingPolls]);
 
   const [role, setRole] = useState<"creator" | "participant">("creator");
   const [polls, setPolls] = useState<PollWithMeta[]>([]);
@@ -64,9 +71,11 @@ export default function Dashboard() {
   useEffect(() => {
     const storedTx = sessionStorage.getItem(PENDING_POLL_TX_KEY);
     if (storedTx) {
+      console.log("[Dashboard] Found pending transaction:", storedTx);
+      console.log("[Dashboard] Explorer URL:", `${config.explorerUrl}/transaction/${storedTx}`);
       setPendingTxId(storedTx);
     }
-  }, []);
+  }, [config.explorerUrl]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -89,9 +98,17 @@ export default function Dashboard() {
       // Sort by ID descending (newest first)
       const sortedPolls = allPolls.sort((a, b) => b.id - a.id);
 
+      console.log("[Dashboard] Fetched polls:", {
+        count: sortedPolls.length,
+        previousCount: previousPollCountRef.current,
+        pendingTxId,
+        polls: sortedPolls.map(p => ({ id: p.id, creator: p.creator, title: p.title })),
+      });
+
       // Check if poll count increased (new poll appeared)
       if (pendingTxId && sortedPolls.length > previousPollCountRef.current) {
         // New poll appeared, clear pending transaction
+        console.log("[Dashboard] New poll detected! Clearing pending tx.");
         sessionStorage.removeItem(PENDING_POLL_TX_KEY);
         setPendingTxId(null);
         toast.success("Your poll is now live!", {
@@ -131,6 +148,32 @@ export default function Dashboard() {
   useEffect(() => {
     fetchPolls();
   }, [fetchPolls]);
+
+  // Check if any pending polls have been confirmed on-chain
+  useEffect(() => {
+    if (pendingPolls.length === 0 || polls.length === 0) return;
+
+    pendingPolls.forEach((pendingPoll) => {
+      if (pendingPoll.status !== PENDING_POLL_STATUS.PENDING) return;
+
+      // Look for a matching poll that appeared on-chain
+      // Match by title and creator (both normalized)
+      const matchingPoll = polls.find((onChainPoll) => {
+        const titleMatch = onChainPoll.title.toLowerCase() === pendingPoll.title.toLowerCase();
+        const creatorMatch = onChainPoll.creator.toLowerCase() === pendingPoll.walletAddress.toLowerCase();
+        return titleMatch && creatorMatch;
+      });
+
+      if (matchingPoll) {
+        console.log("[Dashboard] Found matching on-chain poll for pending:", {
+          pendingId: pendingPoll.id,
+          onChainId: matchingPoll.id,
+          title: matchingPoll.title,
+        });
+        confirmPendingPoll(pendingPoll.id, matchingPoll.id);
+      }
+    });
+  }, [pendingPolls, polls, confirmPendingPoll]);
 
   // Auto-refresh interval - faster when pending tx exists
   useEffect(() => {
@@ -258,6 +301,118 @@ export default function Dashboard() {
       />
     );
   };
+
+  // Render pending poll card (optimistic UI)
+  const renderPendingPollCard = (pendingPoll: PendingPoll) => {
+    const rewardPool = parseFloat(pendingPoll.fundAmount) / 1e6;
+    const isFailed = pendingPoll.status === PENDING_POLL_STATUS.FAILED;
+
+    return (
+      <div
+        key={`pending-${pendingPoll.id}`}
+        className={`relative group rounded-xl border ${
+          isFailed
+            ? "border-red-500/50 bg-red-500/5"
+            : "border-primary/50 bg-primary/5"
+        } p-4 transition-all hover:shadow-lg`}
+      >
+        {/* Status Badge */}
+        <div className="absolute top-3 right-3 flex items-center gap-2">
+          {isFailed ? (
+            <span className="flex items-center gap-1 text-xs bg-red-500/20 text-red-500 px-2 py-1 rounded-full">
+              <AlertCircle className="w-3 h-3" /> Failed
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
+              <Loader2 className="w-3 h-3 animate-spin" /> Confirming...
+            </span>
+          )}
+        </div>
+
+        {/* Title */}
+        <h3 className="font-semibold text-lg pr-24 line-clamp-2 mb-2">
+          {pendingPoll.title}
+        </h3>
+
+        {/* Description */}
+        {pendingPoll.description && (
+          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+            {pendingPoll.description}
+          </p>
+        )}
+
+        {/* Options Preview */}
+        <div className="flex flex-wrap gap-1 mb-3">
+          {pendingPoll.options.slice(0, 3).map((opt, idx) => (
+            <span
+              key={idx}
+              className="text-xs bg-muted/50 px-2 py-0.5 rounded"
+            >
+              {opt}
+            </span>
+          ))}
+          {pendingPoll.options.length > 3 && (
+            <span className="text-xs text-muted-foreground">
+              +{pendingPoll.options.length - 3} more
+            </span>
+          )}
+        </div>
+
+        {/* Stats Row */}
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>0 votes</span>
+          {rewardPool > 0 && (
+            <span className="font-mono text-accent">
+              {rewardPool.toFixed(2)} PULSE
+            </span>
+          )}
+        </div>
+
+        {/* Error message for failed polls */}
+        {isFailed && pendingPoll.errorMessage && (
+          <p className="mt-2 text-xs text-red-500 line-clamp-2">
+            {pendingPoll.errorMessage}
+          </p>
+        )}
+
+        {/* Actions for failed polls */}
+        {isFailed && (
+          <div className="mt-3 flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs"
+              onClick={() => dismissPendingPoll(pendingPoll.id)}
+            >
+              Dismiss
+            </Button>
+            <Link href="/create">
+              <Button size="sm" className="text-xs">
+                Try Again
+              </Button>
+            </Link>
+          </div>
+        )}
+
+        {/* Transaction link */}
+        {pendingPoll.txHash && config.explorerUrl && (
+          <a
+            href={`${config.explorerUrl}/transaction/${pendingPoll.txHash}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            View Transaction <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+      </div>
+    );
+  };
+
+  // Filter pending polls for current user's creator view
+  const myPendingPolls = pendingPolls.filter(
+    (p) => p.status === PENDING_POLL_STATUS.PENDING || p.status === PENDING_POLL_STATUS.FAILED
+  );
 
   // Loading skeleton
   const PollSkeleton = () => (
@@ -405,7 +560,7 @@ export default function Dashboard() {
 
       {/* Pending transaction banner */}
       {pendingTxId && (
-        <Card className="border-primary/50 bg-primary/5 animate-pulse">
+        <Card className="border-primary/50 bg-primary/5">
           <CardContent className="flex items-center justify-between py-4">
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-primary animate-spin" />
@@ -414,20 +569,37 @@ export default function Dashboard() {
                   Your poll is being indexed...
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  This usually takes 10-30 seconds. The page will auto-refresh.
+                  Aleo transactions can take 1-5 minutes to finalize. Auto-refreshing every 5s.
+                </p>
+                <p className="text-xs text-muted-foreground/70 mt-1 font-mono">
+                  TX: {pendingTxId.slice(0, 20)}...{pendingTxId.slice(-8)}
                 </p>
               </div>
             </div>
-            {config.explorerUrl && (
-              <a
-                href={`${config.explorerUrl}/transaction/${pendingTxId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-xs text-primary hover:underline"
+            <div className="flex items-center gap-2">
+              {config.explorerUrl && (
+                <a
+                  href={`${config.explorerUrl}/transaction/${pendingTxId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  View Transaction <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem(PENDING_POLL_TX_KEY);
+                  setPendingTxId(null);
+                  toast.info("Pending transaction cleared", {
+                    description: "You can try creating the poll again.",
+                  });
+                }}
+                className="text-xs text-muted-foreground hover:text-foreground ml-2"
               >
-                View Transaction <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
+                ✕ Clear
+              </button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -435,7 +607,7 @@ export default function Dashboard() {
       <Tabs defaultValue="active" className="w-full">
         <TabsList className="bg-muted/30">
           <TabsTrigger value="active">
-            Active ({role === "creator" ? myActivePolls.length : activePolls.length})
+            Active ({role === "creator" ? myActivePolls.length + myPendingPolls.length : activePolls.length})
           </TabsTrigger>
           <TabsTrigger value="completed">
             Completed ({role === "creator" ? myClosedPolls.length : closedPolls.length})
@@ -449,7 +621,7 @@ export default function Dashboard() {
               <PollSkeleton />
               <PollSkeleton />
             </div>
-          ) : getDisplayPolls("active").length === 0 ? (
+          ) : getDisplayPolls("active").length === 0 && myPendingPolls.length === 0 ? (
             <Card className="border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <p className="text-muted-foreground mb-4">
@@ -468,6 +640,8 @@ export default function Dashboard() {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {/* Show pending polls first (only in creator view) */}
+              {role === "creator" && myPendingPolls.map(renderPendingPollCard)}
               {getDisplayPolls("active").map(renderPollCard)}
             </div>
           )}

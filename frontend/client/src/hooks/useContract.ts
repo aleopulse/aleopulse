@@ -79,6 +79,16 @@ export function useContract() {
           throw new Error("Wallet not connected");
         }
 
+        console.log("[useContract] Creating poll with input:", {
+          title: input.title,
+          options: input.options,
+          rewardPerVote: input.rewardPerVote,
+          maxVoters: input.maxVoters,
+          durationSecs: input.durationSecs,
+          fundAmount: input.fundAmount,
+          tokenId: config.pulseTokenId,
+        });
+
         const txId = await createPollTx({
           title: input.title,
           description: input.description,
@@ -93,8 +103,11 @@ export function useContract() {
           visibility: input.visibility ?? 0, // 0=Public, 1=Private
         });
 
+        console.log("[useContract] Transaction submitted, txId:", txId);
+
         return { hash: txId || "", success: !!txId };
       } catch (err) {
+        console.error("[useContract] Create poll failed:", err);
         const message = err instanceof Error ? err.message : "Failed to create poll";
         setError(message);
         throw err;

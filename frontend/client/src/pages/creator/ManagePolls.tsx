@@ -23,6 +23,9 @@ import {
   Clock,
   Play,
   StopCircle,
+  Eye,
+  EyeOff,
+  Info,
 } from "lucide-react";
 import { PollLifecycleStepper } from "@/components/PollLifecycleStepper";
 import { getCoinSymbol, type CoinTypeId } from "@/lib/tokens";
@@ -42,6 +45,8 @@ import {
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import type { PollWithMeta } from "@/types/poll";
@@ -59,6 +64,7 @@ export default function ManagePolls() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("all");
+  const [showAllPolls, setShowAllPolls] = useState(false);
 
   // Modal states
   const [closePollModal, setClosePollModal] = useState<{ open: boolean; pollId: number | null }>({
@@ -79,6 +85,13 @@ export default function ManagePolls() {
     setIsLoading(true);
     try {
       const allPolls = await getAllPolls();
+      // Debug logging
+      console.log("[ManagePolls] Fetched polls:", allPolls.length);
+      console.log("[ManagePolls] Connected wallet:", address);
+      allPolls.forEach(p => {
+        const isCreator = p.creator.toLowerCase() === address?.toLowerCase();
+        console.log(`[ManagePolls] Poll ${p.id}: creator=${p.creator}, isCreator=${isCreator}`);
+      });
       setPolls(allPolls.sort((a, b) => b.id - a.id));
 
       // Check which CLOSED polls can be finalized
@@ -104,12 +117,22 @@ export default function ManagePolls() {
     fetchPolls();
   }, [fetchPolls]);
 
-  // Filter to creator's polls
+  // Filter to creator's polls (or show all if toggle is on)
   const myPolls = useMemo(() => {
+    if (showAllPolls) return polls;
     if (!address) return [];
     return polls.filter(
       (p) => p.creator.toLowerCase() === address.toLowerCase()
     );
+  }, [polls, address, showAllPolls]);
+
+  // Check if there are polls but none belong to connected wallet
+  const hasOtherCreatorPolls = useMemo(() => {
+    if (!address || polls.length === 0) return false;
+    const myPollCount = polls.filter(
+      (p) => p.creator.toLowerCase() === address.toLowerCase()
+    ).length;
+    return myPollCount === 0 && polls.length > 0;
   }, [polls, address]);
 
   // Filter by tab and search
@@ -309,7 +332,26 @@ export default function ManagePolls() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-md border bg-muted/30">
+                  <Switch
+                    id="show-all"
+                    checked={showAllPolls}
+                    onCheckedChange={setShowAllPolls}
+                  />
+                  <Label htmlFor="show-all" className="text-sm cursor-pointer">
+                    {showAllPolls ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                  </Label>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{showAllPolls ? "Showing all polls" : "Showing only your polls"}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button variant="outline" onClick={fetchPolls}>
             <RefreshCcw className="w-4 h-4 mr-2" /> Refresh
           </Button>
@@ -320,6 +362,34 @@ export default function ManagePolls() {
           </Link>
         </div>
       </div>
+
+      {/* Info banner when polls exist but none belong to connected wallet */}
+      {hasOtherCreatorPolls && !showAllPolls && (
+        <Card className="border-blue-500/50 bg-blue-500/10 mb-6">
+          <CardContent className="flex items-start gap-3 py-4">
+            <Info className="w-5 h-5 text-blue-500 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-blue-600 dark:text-blue-400 font-medium">
+                {polls.length} poll{polls.length > 1 ? "s" : ""} found on-chain, but none were created by your connected wallet.
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Connected: <code className="text-xs bg-muted px-1 rounded">{address}</code>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Poll creator: <code className="text-xs bg-muted px-1 rounded">{polls[0]?.creator}</code>
+              </p>
+              <Button
+                variant="link"
+                size="sm"
+                className="px-0 text-blue-500"
+                onClick={() => setShowAllPolls(true)}
+              >
+                Show all polls →
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -366,6 +436,7 @@ export default function ManagePolls() {
                   const rewardPool = poll.reward_pool / 1e6;
                   const coinSymbol = getCoinSymbol(poll.coin_type_id as CoinTypeId);
                   const isActionLoading = actionLoading?.pollId === poll.id;
+                  const isMyPoll = poll.creator.toLowerCase() === address?.toLowerCase();
 
                   return (
                     <Link
@@ -379,10 +450,20 @@ export default function ManagePolls() {
                             {poll.title}
                           </span>
                           {getStatusBadge(poll)}
+                          {showAllPolls && !isMyPoll && (
+                            <Badge variant="outline" className="text-xs">
+                              Other
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {poll.totalVotes} votes • {rewardPool.toFixed(4)} {coinSymbol} • {poll.timeRemaining}
                         </p>
+                        {showAllPolls && (
+                          <p className="text-xs text-muted-foreground/70 mt-1 font-mono truncate">
+                            Creator: {poll.creator.slice(0, 15)}...{poll.creator.slice(-6)}
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
