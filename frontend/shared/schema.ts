@@ -814,3 +814,56 @@ export const userPreferences = pgTable("user_preferences", {
 
 export type UserPreferences = typeof userPreferences.$inferSelect;
 export type InsertUserPreferences = typeof userPreferences.$inferInsert;
+
+// ============================================
+// Pending Polls (Optimistic UI Support)
+// ============================================
+
+export const PENDING_POLL_STATUS = {
+  PENDING: 0,      // Transaction submitted, waiting for confirmation
+  CONFIRMED: 1,    // On-chain confirmation received
+  FAILED: 2,       // Transaction failed or timed out
+} as const;
+
+export const pendingPolls = pgTable("pending_polls", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+
+  // Creator info
+  walletAddress: varchar("wallet_address", { length: 66 }).notNull(),
+
+  // Transaction tracking
+  txHash: varchar("tx_hash", { length: 100 }), // Aleo transaction ID
+
+  // Poll data (stored for optimistic display)
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  options: jsonb("options").$type<string[]>().notNull(),
+
+  // Poll settings
+  rewardPerVote: varchar("reward_per_vote", { length: 50 }).notNull(),
+  maxVoters: integer("max_voters").notNull(),
+  durationBlocks: integer("duration_blocks").notNull(),
+  fundAmount: varchar("fund_amount", { length: 50 }).notNull(),
+  tokenId: varchar("token_id", { length: 50 }).notNull(),
+  privacyMode: integer("privacy_mode").default(0).notNull(),
+  visibility: integer("visibility").default(0).notNull(),
+
+  // Status tracking
+  status: integer("status").default(PENDING_POLL_STATUS.PENDING).notNull(),
+  onChainId: integer("on_chain_id"), // Set when confirmed
+
+  // Network info
+  network: varchar("network", { length: 20 }).default("testnet").notNull(),
+
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  confirmedAt: timestamp("confirmed_at"),
+  failedAt: timestamp("failed_at"),
+  errorMessage: text("error_message"),
+
+  // Auto-cleanup: polls older than 1 hour in pending status are considered failed
+  expiresAt: timestamp("expires_at"),
+});
+
+export type PendingPoll = typeof pendingPolls.$inferSelect;
+export type InsertPendingPoll = typeof pendingPolls.$inferInsert;

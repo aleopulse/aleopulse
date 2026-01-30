@@ -28,6 +28,7 @@ import {
   projectInsights,
   faucetClaims,
   userPreferences,
+  pendingPolls,
   TIERS,
   TIER_VOTE_LIMITS,
   TIER_PULSE_THRESHOLDS,
@@ -44,6 +45,7 @@ import {
   PROJECT_STATUS,
   PROJECT_ROLE,
   PROFILE_TYPES,
+  PENDING_POLL_STATUS,
   type UserProfile,
   type Season,
   type Quest,
@@ -57,6 +59,7 @@ import {
   type ProjectInsight,
   type UserPreferences,
   type ProfileType,
+  type PendingPoll,
 } from "@shared/schema";
 
 // ============================================
@@ -4323,6 +4326,216 @@ To enable AI insights, configure the OpenAI API key in your environment.`;
     } catch (error) {
       console.error("Error checking onboarding status:", error);
       res.status(500).json({ success: false, error: "Failed to check onboarding status" });
+    }
+  });
+
+  // ============================================
+  // Pending Polls (Optimistic UI)
+  // ============================================
+
+  /**
+   * POST /api/polls/pending
+   * Create a pending poll after wallet approval (for optimistic UI)
+   */
+  app.post("/api/polls/pending", async (req, res) => {
+    try {
+      const {
+        walletAddress,
+        txHash,
+        title,
+        description,
+        options,
+        rewardPerVote,
+        maxVoters,
+        durationBlocks,
+        fundAmount,
+        tokenId,
+        privacyMode,
+        visibility,
+        network,
+      } = req.body;
+
+      if (!walletAddress || !title || !options || options.length < 2) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required fields: walletAddress, title, options (min 2)",
+        });
+      }
+
+      // Set expiration to 1 hour from now
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+      const [pendingPoll] = await db
+        .insert(pendingPolls)
+        .values({
+          walletAddress: walletAddress.toLowerCase(),
+          txHash: txHash || null,
+          title,
+          description: description || null,
+          options,
+          rewardPerVote: rewardPerVote?.toString() || "0",
+          maxVoters: maxVoters || 100,
+          durationBlocks: durationBlocks || 86400,
+          fundAmount: fundAmount?.toString() || "0",
+          tokenId: tokenId || "100field",
+          privacyMode: privacyMode || 0,
+          visibility: visibility || 0,
+          network: network || "testnet",
+          status: PENDING_POLL_STATUS.PENDING,
+          expiresAt,
+        })
+        .returning();
+
+      console.log(`[PendingPoll] Created pending poll ${pendingPoll.id} for ${walletAddress}, txHash: ${txHash}`);
+
+      res.json({
+        success: true,
+        data: pendingPoll,
+      });
+    } catch (error) {
+      console.error("Error creating pending poll:", error);
+      res.status(500).json({ success: false, error: "Failed to create pending poll" });
+    }
+  });
+
+  /**
+   * GET /api/polls/pending/:address
+   * Get all pending polls for a wallet address
+   */
+  app.get("/api/polls/pending/:address", async (req, res) => {
+    try {
+      const { address } = req.params;
+      const { network } = req.query;
+
+      const polls = await db
+        .select()
+        .from(pendingPolls)
+        .where(
+          and(
+            eq(pendingPolls.walletAddress, address.toLowerCase()),
+            eq(pendingPolls.status, PENDING_POLL_STATUS.PENDING),
+            network ? eq(pendingPolls.network, network as string) : undefined
+          )
+        )
+        .orderBy(desc(pendingPolls.createdAt));
+
+      res.json({
+        success: true,
+        data: polls,
+      });
+    } catch (error) {
+      console.error("Error fetching pending polls:", error);
+      res.status(500).json({ success: false, error: "Failed to fetch pending polls" });
+    }
+  });
+
+  /**
+   * PUT /api/polls/pending/:id/confirm
+   * Mark a pending poll as confirmed with on-chain ID
+   */
+  app.put("/api/polls/pending/:id/confirm", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { onChainId } = req.body;
+
+      if (onChainId === undefined) {
+        return res.status(400).json({
+          success: false,
+          error: "onChainId is required",
+        });
+      }
+
+      const [updated] = await db
+        .update(pendingPolls)
+        .set({
+          status: PENDING_POLL_STATUS.CONFIRMED,
+          onChainId,
+          confirmedAt: new Date(),
+        })
+        .where(eq(pendingPolls.id, id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ success: false, error: "Pending poll not found" });
+      }
+
+      console.log(`[PendingPoll] Confirmed poll ${id} with on-chain ID ${onChainId}`);
+
+      res.json({
+        success: true,
+        data: updated,
+      });
+    } catch (error) {
+      console.error("Error confirming pending poll:", error);
+      res.status(500).json({ success: false, error: "Failed to confirm pending poll" });
+    }
+  });
+
+  /**
+   * PUT /api/polls/pending/:id/fail
+   * Mark a pending poll as failed
+   */
+  app.put("/api/polls/pending/:id/fail", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { errorMessage } = req.body;
+
+      const [updated] = await db
+        .update(pendingPolls)
+        .set({
+          status: PENDING_POLL_STATUS.FAILED,
+          failedAt: new Date(),
+          errorMessage: errorMessage || "Transaction failed or timed out",
+        })
+        .where(eq(pendingPolls.id, id))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ success: false, error: "Pending poll not found" });
+      }
+
+      console.log(`[PendingPoll] Failed poll ${id}: ${errorMessage}`);
+
+      res.json({
+        success: true,
+        data: updated,
+      });
+    } catch (error) {
+      console.error("Error marking pending poll as failed:", error);
+      res.status(500).json({ success: false, error: "Failed to update pending poll" });
+    }
+  });
+
+  /**
+   * DELETE /api/polls/pending/:id
+   * Delete a pending poll (user can dismiss)
+   */
+  app.delete("/api/polls/pending/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { walletAddress } = req.body;
+
+      // Verify ownership
+      const [existing] = await db
+        .select()
+        .from(pendingPolls)
+        .where(eq(pendingPolls.id, id))
+        .limit(1);
+
+      if (!existing) {
+        return res.status(404).json({ success: false, error: "Pending poll not found" });
+      }
+
+      if (walletAddress && existing.walletAddress !== walletAddress.toLowerCase()) {
+        return res.status(403).json({ success: false, error: "Not authorized to delete this poll" });
+      }
+
+      await db.delete(pendingPolls).where(eq(pendingPolls.id, id));
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting pending poll:", error);
+      res.status(500).json({ success: false, error: "Failed to delete pending poll" });
     }
   });
 

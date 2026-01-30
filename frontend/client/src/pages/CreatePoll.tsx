@@ -11,6 +11,7 @@ import { useLocation, useSearch } from "wouter";
 import { useContract } from "@/hooks/useContract";
 import { useWalletConnection } from "@/hooks/useWalletConnection";
 import { useNetwork } from "@/contexts/NetworkContext";
+import { usePendingPolls } from "@/hooks/usePendingPolls";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { REWARD_TYPE, PLATFORM_FEE_BPS, calculatePlatformFee, calculateNetAmount, PRIVACY_MODE, POLL_VISIBILITY } from "@/types/poll";
@@ -87,6 +88,7 @@ export default function CreatePoll() {
   const { isConnected, isPrivyWallet } = useWalletConnection();
   const { createPoll, loading } = useContract();
   const { config } = useNetwork();
+  const { createPendingPoll } = usePendingPolls();
 
   // Confirmation dialog state for Privy wallets
   const [showConfirmation, setShowConfirmation] = useState(false);
@@ -286,11 +288,38 @@ export default function CreatePoll() {
 
       showTransactionSuccessToast(
         result.hash,
-        "Poll Created!",
-        "Your poll has been deployed to the Aleo network.",
+        "Poll Submitted!",
+        "Your poll is being confirmed on the Aleo network (1-5 min).",
         config.explorerUrl,
         result.sponsored
       );
+
+      // Create pending poll in database for optimistic UI
+      console.log("[CreatePoll] Creating pending poll with txHash:", result.hash);
+      try {
+        const pendingPoll = await createPendingPoll({
+          txHash: result.hash || undefined,
+          title: title.trim(),
+          description: description.trim() || undefined,
+          options: validOptions,
+          rewardPerVote: Math.floor(calculations.rewardPerVoter * 1e6),
+          maxVoters: calculations.maxVoters,
+          durationBlocks: Math.floor(DURATION_OPTIONS[duration] / 15), // ~15 sec per block
+          fundAmount: Math.floor(calculations.grossAmount * 1e6),
+          tokenId: `${selectedToken * 100}field`,
+          privacyMode,
+          visibility,
+        });
+
+        if (pendingPoll) {
+          console.log("[CreatePoll] Pending poll created successfully:", pendingPoll.id);
+        } else {
+          console.warn("[CreatePoll] createPendingPoll returned null - check usePendingPolls hook");
+        }
+      } catch (pendingPollError) {
+        console.error("[CreatePoll] Failed to create pending poll:", pendingPollError);
+        // Don't fail the whole operation - the on-chain transaction was still submitted
+      }
 
       // Store pending transaction ID for dashboard to track
       if (result.hash) {
