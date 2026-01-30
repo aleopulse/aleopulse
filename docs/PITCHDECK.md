@@ -1,4 +1,4 @@
-# LeoPulse Pitch Deck
+# AleoPulse Pitch Deck
 
 ## 7-Slide Investor Pitch Deck
 
@@ -14,7 +14,7 @@
 | 1 | Title & Hook | 15s | Capture attention with the privacy problem |
 | 2 | The Problem | 25s | Market pain points with data |
 | 3 | Market Opportunity | 25s | TAM/SAM/SOM with growth data |
-| 4 | The Solution | 30s | LeoPulse value proposition |
+| 4 | The Solution | 30s | AleoPulse value proposition |
 | 5 | How It Works | 25s | Technology overview (simplified) |
 | 6 | Traction & Roadmap | 20s | Progress and future plans |
 | 7 | Call to Action | 10s | Ask and contact info |
@@ -28,7 +28,7 @@
 ### Content
 - **Headline:** "Anonymity is a Lie"
 - **Subheadline:** "94% of consumers won't buy from companies that don't protect their data"
-- **Brand:** LeoPulse logo with tagline "Privacy-Preserving Polls on Aleo"
+- **Brand:** AleoPulse logo with tagline "Privacy-Preserving Polls on Aleo"
 
 ### Visual Representation
 ```
@@ -43,7 +43,7 @@
 │                                                                 │
 │                                                                 │
 │                      ┌─────────────┐                            │
-│                      │  LeoPulse   │                            │
+│                      │  AleoPulse   │                            │
 │                      └─────────────┘                            │
 │               Privacy-Preserving Polls on Aleo                  │
 │                                                                 │
@@ -54,10 +54,10 @@
 1. Dark screen fade in
 2. "Anonymity is a Lie" appears with dramatic reveal
 3. Statistic fades in below
-4. LeoPulse logo scales up from center
+4. AleoPulse logo scales up from center
 
 ### Audio Script
-> "Ninety-four percent of consumers say they won't buy from companies that don't protect their data. Yet every day, billions of survey responses are collected with a promise of anonymity that platforms simply cannot keep. LeoPulse changes that."
+> "Ninety-four percent of consumers say they won't buy from companies that don't protect their data. Yet every day, billions of survey responses are collected with a promise of anonymity that platforms simply cannot keep. AleoPulse changes that."
 
 ---
 
@@ -162,14 +162,14 @@
 3. Growth driver badges pulse in at bottom
 
 ### Audio Script
-> "The opportunity is massive. The survey software market is worth over four billion dollars today, growing to twelve billion by twenty-thirty-two. Privacy-focused enterprise tools are surging thirty-seven percent year over year. And the decentralized governance market? It's projected to grow from three hundred fifty million to nearly eight billion by twenty-thirty-five. LeoPulse sits at the intersection of these converging markets."
+> "The opportunity is massive. The survey software market is worth over four billion dollars today, growing to twelve billion by twenty-thirty-two. Privacy-focused enterprise tools are surging thirty-seven percent year over year. And the decentralized governance market? It's projected to grow from three hundred fifty million to nearly eight billion by twenty-thirty-five. AleoPulse sits at the intersection of these converging markets."
 
 ---
 
 ## Slide 4: The Solution
 
 ### Content
-**Headline:** "LeoPulse: Proven Privacy, Not Promises"
+**Headline:** "AleoPulse: Proven Privacy, Not Promises"
 
 **Core Value Props:**
 1. **Zero-Knowledge Proofs:** Mathematical guarantee of anonymity
@@ -184,7 +184,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                                                                 │
-│              LeoPulse: Proven Privacy, Not Promises             │
+│             AleoPulse: Proven Privacy, Not Promises             │
 │              ══════════════════════════════════════             │
 │                                                                 │
 │       ┌───────────────────────────────────────────────┐         │
@@ -208,13 +208,13 @@
 ```
 
 ### Animation
-1. LeoPulse logo pulses
+1. AleoPulse logo pulses
 2. Four value props reveal in grid formation
 3. Differentiator statement types in
 4. "Built on Aleo" badge fades in
 
 ### Audio Script
-> "LeoPulse is the first survey platform where anonymity isn't just promised—it's mathematically proven. Built on Aleo's zero-knowledge technology, we guarantee that your vote can never be traced back to you. Results are verified on-chain, making manipulation impossible. With three privacy modes and PULSE token incentives, we've built the trust layer that data collection has been missing."
+> "AleoPulse is the first survey platform where anonymity isn't just promised—it's mathematically proven. Built on Aleo's zero-knowledge technology, we guarantee that your vote can never be traced back to you. Results are verified on-chain, making manipulation impossible. With three privacy modes and PULSE token incentives, we've built the trust layer that data collection has been missing."
 
 ---
 
@@ -337,7 +337,7 @@ Voter → ZK Proof Generated → Proof Verified → Vote Counted
 4. Aleo stats counter animate
 
 ### Audio Script
-> "We're not just planning—we're building. LeoPulse is live on Aleo testnet with all three privacy modes, private poll invitations, and wallet integration complete. Our roadmap: PULSE token launch in Q1, enterprise features in Q2, and scaling with mobile and partnerships through the rest of twenty-twenty-six. We're building on Aleo—a blockchain backed by two hundred twenty-eight million dollars with the fastest-growing developer ecosystem in privacy tech."
+> "We're not just planning—we're building. AleoPulse is live on Aleo testnet with all three privacy modes, private poll invitations, and wallet integration complete. Our roadmap: PULSE token launch in Q1, enterprise features in Q2, and scaling with mobile and partnerships through the rest of twenty-twenty-six. We're building on Aleo—a blockchain backed by two hundred twenty-eight million dollars with the fastest-growing developer ecosystem in privacy tech."
 
 ---
 
@@ -351,12 +351,10 @@ Voter → ZK Proof Generated → Proof Verified → Vote Counted
 - Use of Funds: Development, Go-to-Market, Team
 
 **Contact:**
-- Website: [leopulse.io]
-- Email: [team@leopulse.io]
-- Twitter/X: [@leopulse]
+- Website: [aleo.dpolls.ai]
 
 **Closing Statement:**
-"Where your voice is heard, but your identity isn't."
+"Where every opinion is valued, without sacrificing privacy."
 
 ### Visual Representation
 ```
@@ -368,16 +366,14 @@ Voter → ZK Proof Generated → Proof Verified → Vote Counted
 │                                                                 │
 │                                                                 │
 │                       ┌─────────────┐                           │
-│                       │  LeoPulse   │                           │
+│                       │  AleoPulse   │                           │
 │                       └─────────────┘                           │
 │                                                                 │
-│          "Where your voice is heard,                            │
-│              but your identity isn't."                          │
+│          "Where every opinion is valued,                            │
+│              without sacrificing privacy."                          │
 │                                                                 │
 │                                                                 │
-│                    🌐  leopulse.io                              │
-│                    ✉️  team@leopulse.io                         │
-│                    🐦  @leopulse                                │
+│                    🌐  aleo.dpolls.ai                              │
 │                                                                 │
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
@@ -390,7 +386,7 @@ Voter → ZK Proof Generated → Proof Verified → Vote Counted
 4. Subtle particle/glow effect around logo
 
 ### Audio Script
-> "Privacy matters. Data integrity matters. Trust matters. LeoPulse delivers all three—with cryptographic guarantees. Join us in building the future of honest feedback. Visit leopulse.io. LeoPulse: where your voice is heard, but your identity isn't."
+> "Privacy matters. Data integrity matters. Trust matters. AleoPulse delivers all three—with cryptographic guarantees. Join us in building the future of honest feedback. Visit aleo.dpolls.ai. AleoPulse: where your voice is heard, but your identity isn't."
 
 ---
 
@@ -400,25 +396,25 @@ Voter → ZK Proof Generated → Proof Verified → Vote Counted
 
 ```
 [SLIDE 1 - 15 seconds]
-Ninety-four percent of consumers say they won't buy from companies that don't protect their data. Yet every day, billions of survey responses are collected with a promise of anonymity that platforms simply cannot keep. LeoPulse changes that.
+Ninety-four percent of consumers say they won't buy from companies that don't protect their data. Yet every day, billions of survey responses are collected with a promise of anonymity that platforms simply cannot keep. AleoPulse changes that.
 
 [SLIDE 2 - 25 seconds]
 The problem runs deep. Traditional survey platforms promise anonymity but store your IP address and digital fingerprint. Twenty-six percent of employees fear retaliation from so-called anonymous workplace surveys. And after data breaches, more than half of consumers simply walk away. In 2024 alone, regulators imposed two-point-one billion dollars in privacy fines. The trust is broken.
 
 [SLIDE 3 - 25 seconds]
-The opportunity is massive. The survey software market is worth over four billion dollars today, growing to twelve billion by twenty-thirty-two. Privacy-focused enterprise tools are surging thirty-seven percent year over year. And the decentralized governance market? It's projected to grow from three hundred fifty million to nearly eight billion by twenty-thirty-five. LeoPulse sits at the intersection of these converging markets.
+The opportunity is massive. The survey software market is worth over four billion dollars today, growing to twelve billion by twenty-thirty-two. Privacy-focused enterprise tools are surging thirty-seven percent year over year. And the decentralized governance market? It's projected to grow from three hundred fifty million to nearly eight billion by twenty-thirty-five. AleoPulse sits at the intersection of these converging markets.
 
 [SLIDE 4 - 30 seconds]
-LeoPulse is the first survey platform where anonymity isn't just promised—it's mathematically proven. Built on Aleo's zero-knowledge technology, we guarantee that your vote can never be traced back to you. Results are verified on-chain, making manipulation impossible. With three privacy modes and PULSE token incentives, we've built the trust layer that data collection has been missing.
+AleoPulse is the first survey platform where anonymity isn't just promised—it's mathematically proven. Built on Aleo's zero-knowledge technology, we guarantee that your vote can never be traced back to you. Results are verified on-chain, making manipulation impossible. With three privacy modes and PULSE token incentives, we've built the trust layer that data collection has been missing.
 
 [SLIDE 5 - 25 seconds]
 Here's how it works. When you vote, a zero-knowledge proof is generated on your device. This proof is verified on Aleo's blockchain, confirming three things: you're eligible, your vote is valid, and you haven't voted before. Critically, none of this reveals who you are or how you voted. The math guarantees it.
 
 [SLIDE 6 - 20 seconds]
-We're not just planning—we're building. LeoPulse is live on Aleo testnet with all three privacy modes, private poll invitations, and wallet integration complete. Our roadmap: PULSE token launch in Q1, enterprise features in Q2, and scaling with mobile and partnerships through the rest of twenty-twenty-six. We're building on Aleo—a blockchain backed by two hundred twenty-eight million dollars with the fastest-growing developer ecosystem in privacy tech.
+We're not just planning—we're building. AleoPulse is live on Aleo testnet with all three privacy modes, private poll invitations, and wallet integration complete. Our roadmap: PULSE token launch in Q1, enterprise features in Q2, and scaling with mobile and partnerships through the rest of twenty-twenty-six. We're building on Aleo—a blockchain backed by two hundred twenty-eight million dollars with the fastest-growing developer ecosystem in privacy tech.
 
 [SLIDE 7 - 10 seconds]
-Privacy matters. Data integrity matters. Trust matters. LeoPulse delivers all three—with cryptographic guarantees. Join us in building the future of honest feedback. Visit leopulse.io. LeoPulse: where your voice is heard, but your identity isn't.
+Privacy matters. Data integrity matters. Trust matters. AleoPulse delivers all three—with cryptographic guarantees. Join us in building the future of honest feedback. Visit leopulse.io. AleoPulse: where your voice is heard, but your identity isn't.
 ```
 
 **Total Runtime:** ~2 minutes 30 seconds

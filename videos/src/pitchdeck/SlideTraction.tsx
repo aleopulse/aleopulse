@@ -149,7 +149,8 @@ export const SlideTraction: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
-  const aleoOpacity = interpolate(frame, [fps * 4.5, fps * 5], [0, 1], {
+  // Aleo stats appear when "$228 million" is mentioned (~18s into slide)
+  const aleoOpacity = interpolate(frame, [fps * 18, fps * 19], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -225,11 +226,16 @@ export const SlideTraction: React.FC = () => {
             >
               Current Traction
             </div>
+            {/* Synced with voiceover (26s total):
+                0.5s: "live on Aleo testnet"
+                2s: "all three privacy modes"
+                4s: "private poll invitations"
+                5s: "wallet integration complete" */}
             <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-              <TractionItem text="Live on Aleo Testnet" delay={0.6} />
-              <TractionItem text="3 Privacy Modes Implemented" delay={0.9} />
-              <TractionItem text="Private Poll Invite System" delay={1.2} />
-              <TractionItem text="Leo Wallet Integration" delay={1.5} />
+              <TractionItem text="Live on Aleo Testnet" delay={0.5} />
+              <TractionItem text="3 Privacy Modes Implemented" delay={2} />
+              <TractionItem text="Private Poll Invite System" delay={4} />
+              <TractionItem text="Leo Wallet Integration" delay={5} />
             </div>
           </div>
 
@@ -252,25 +258,29 @@ export const SlideTraction: React.FC = () => {
             >
               Roadmap
             </div>
+            {/* Synced with voiceover:
+                9s: "Pulse token launch in Q1"
+                11s: "enterprise features in Q2"
+                13s: "scaling with mobile and partnerships through the rest of 2026" */}
             <div style={{ display: "flex", gap: 20 }}>
               <RoadmapPhase
                 quarter="Q1 2026"
                 title="Token Launch"
                 items={["PULSE Token", "Reward System", "Staking"]}
-                delay={2.0}
+                delay={9}
                 isHighlighted
               />
               <RoadmapPhase
                 quarter="Q2 2026"
                 title="Enterprise"
                 items={["API Access", "Analytics", "Compliance"]}
-                delay={2.4}
+                delay={11}
               />
               <RoadmapPhase
                 quarter="Q3-Q4 2026"
                 title="Scale"
                 items={["Mobile App", "SDK", "Partnerships"]}
-                delay={2.8}
+                delay={13}
               />
             </div>
           </div>

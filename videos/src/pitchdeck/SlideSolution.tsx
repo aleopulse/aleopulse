@@ -86,17 +86,19 @@ export const SlideSolution: React.FC = () => {
     config: { damping: 15, stiffness: 100 },
   });
 
-  const differentiatorOpacity = interpolate(frame, [fps * 4, fps * 5], [0, 1], {
+  // "Built on Aleo's zero-knowledge technology" mentioned at ~5s
+  const aleoOpacity = interpolate(frame, [fps * 5, fps * 5.5], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  const differentiatorY = interpolate(frame, [fps * 4, fps * 5], [20, 0], {
+  // "built the trust layer" at ~18s
+  const differentiatorOpacity = interpolate(frame, [fps * 18, fps * 19], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  const aleoOpacity = interpolate(frame, [fps * 5.5, fps * 6], [0, 1], {
+  const differentiatorY = interpolate(frame, [fps * 18, fps * 19], [20, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -150,7 +152,7 @@ export const SlideSolution: React.FC = () => {
               fontFamily: "system-ui, sans-serif",
             }}
           >
-            LeoPulse
+            AleoPulse
           </div>
           <div
             style={{
@@ -164,7 +166,11 @@ export const SlideSolution: React.FC = () => {
           </div>
         </div>
 
-        {/* Value Props Grid */}
+        {/* Value Props Grid - synced with voiceover (22s total):
+            4s: "mathematically proven" -> ZK Proofs
+            9s: "verified on-chain" -> On-Chain Verification
+            13s: "three privacy modes" -> Privacy Modes
+            14s: "Pulse token incentives" -> PULSE Incentives */}
         <div
           style={{
             display: "flex",
@@ -176,25 +182,25 @@ export const SlideSolution: React.FC = () => {
             icon="🔐"
             title="Zero-Knowledge Proofs"
             description="Mathematical guarantee of anonymity"
-            delay={0.8}
+            delay={4}
           />
           <ValueProp
             icon="📊"
             title="On-Chain Verification"
             description="Tamper-proof, auditable results"
-            delay={1.2}
+            delay={9}
           />
           <ValueProp
             icon="🎚️"
             title="Flexible Privacy Modes"
             description="Anonymous, Semi-Private, Identified"
-            delay={1.6}
+            delay={13}
           />
           <ValueProp
             icon="💰"
             title="PULSE Incentives"
             description="Reward honest participation"
-            delay={2.0}
+            delay={14}
           />
         </div>
 

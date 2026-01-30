@@ -15,32 +15,36 @@ export const SlideMarket: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
-  // Market circles animation
-  const somScale = spring({
-    frame: frame - fps * 0.6,
+  // Market circles animation - synced with voiceover (23s total):
+  // 0-5s: "$4 billion today, growing to $12 billion" -> TAM
+  // 5-12s: "37% year over year" -> SAM, employee engagement
+  // 12-16s: "decentralized governance market" -> Web3
+  // 16-23s: "Aleo Pulse sits at the intersection" -> SOM, drivers
+  const tamScale = spring({
+    frame: frame - fps * 0.5,
     fps,
     config: { damping: 15, stiffness: 80 },
   });
 
   const samScale = spring({
-    frame: frame - fps * 1.0,
-    fps,
-    config: { damping: 15, stiffness: 80 },
-  });
-
-  const tamScale = spring({
-    frame: frame - fps * 1.4,
+    frame: frame - fps * 8,
     fps,
     config: { damping: 15, stiffness: 80 },
   });
 
   const web3Scale = spring({
-    frame: frame - fps * 1.8,
+    frame: frame - fps * 12,
     fps,
     config: { damping: 15, stiffness: 80 },
   });
 
-  const driversOpacity = interpolate(frame, [fps * 4, fps * 5], [0, 1], {
+  const somScale = spring({
+    frame: frame - fps * 18,
+    fps,
+    config: { damping: 15, stiffness: 80 },
+  });
+
+  const driversOpacity = interpolate(frame, [fps * 20, fps * 21], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -194,7 +198,10 @@ export const SlideMarket: React.FC = () => {
             </div>
           </div>
 
-          {/* Market Details */}
+          {/* Market Details - synced with voiceover:
+              3s: "$4 billion today, growing to $12 billion"
+              5s: "37% year over year" (employee engagement)
+              12s: "decentralized governance market" */}
           <div
             style={{
               display: "flex",
@@ -207,21 +214,21 @@ export const SlideMarket: React.FC = () => {
               value="$4.13B → $12.02B"
               label="Survey Software Market"
               cagr="14.3%"
-              delay={1.4}
-            />
-            <MarketRow
-              color="#6366f1"
-              value="$0.35B → $7.73B"
-              label="Decentralized Voting"
-              cagr="32.5%"
-              delay={1.8}
+              delay={3}
             />
             <MarketRow
               color="#8b5cf6"
               value="$2.14B"
               label="Employee Engagement"
               cagr="+37% YoY"
-              delay={2.2}
+              delay={5}
+            />
+            <MarketRow
+              color="#6366f1"
+              value="$0.35B → $7.73B"
+              label="Decentralized Voting"
+              cagr="32.5%"
+              delay={12}
             />
           </div>
         </div>

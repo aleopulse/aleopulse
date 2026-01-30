@@ -1,4 +1,4 @@
-// LeoPulse Pitch Deck Components
+// AleoPulse Pitch Deck Components
 export { SlideTitle } from "./SlideTitle";
 export { SlideProblem } from "./SlideProblem";
 export { SlideMarket } from "./SlideMarket";

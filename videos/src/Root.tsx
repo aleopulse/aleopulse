@@ -4,8 +4,8 @@ import { PitchDeck } from "./PitchDeck";
 
 // DemoVideo: 45 seconds at 30fps
 const DEMO_DURATION_SECONDS = 45;
-// PitchDeck: 150 seconds (2:30) at 30fps
-const PITCHDECK_DURATION_SECONDS = 150;
+// PitchDeck: 133 seconds (2:13) at 30fps - matches pitchdeck_v2.mp3 audio (132.6s)
+const PITCHDECK_DURATION_SECONDS = 133;
 const FPS = 30;
 
 export const RemotionRoot: React.FC = () => {

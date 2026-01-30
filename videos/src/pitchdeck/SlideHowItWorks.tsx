@@ -118,17 +118,21 @@ export const SlideHowItWorks: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
-  const provenOpacity = interpolate(frame, [fps * 3, fps * 3.8], [0, 1], {
+  // Synced with voiceover (15s total):
+  // 6s: "you're eligible, your vote is valid..." -> What's Proven
+  // 11s: "reveals who you are or how you voted" -> What's Hidden
+  // 13s: "The math guarantees it" -> Aleo badge
+  const provenOpacity = interpolate(frame, [fps * 6, fps * 6.8], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  const hiddenOpacity = interpolate(frame, [fps * 4, fps * 4.8], [0, 1], {
+  const hiddenOpacity = interpolate(frame, [fps * 11, fps * 11.8], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  const aleoOpacity = interpolate(frame, [fps * 5, fps * 5.5], [0, 1], {
+  const aleoOpacity = interpolate(frame, [fps * 13, fps * 13.5], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -176,7 +180,11 @@ export const SlideHowItWorks: React.FC = () => {
           How Zero-Knowledge Voting Works
         </div>
 
-        {/* Flow Diagram */}
+        {/* Flow Diagram - synced with voiceover (15s total):
+            1s: "When you vote" -> Voter
+            2s: "a zero-knowledge proof is generated" -> ZK Proof
+            4s: "This proof is verified on Aleo's blockchain" -> Verify
+            5s: complete the flow -> Count */}
         <div
           style={{
             display: "flex",
@@ -189,25 +197,25 @@ export const SlideHowItWorks: React.FC = () => {
             icon="👤"
             title="Voter"
             subtitle="Selects option"
-            delay={0.6}
+            delay={1}
           />
           <FlowStep
             icon="🔐"
             title="ZK Proof"
             subtitle="Generated locally"
-            delay={1.0}
+            delay={2}
           />
           <FlowStep
             icon="✓"
             title="Verify"
             subtitle="On-chain check"
-            delay={1.4}
+            delay={4}
           />
           <FlowStep
             icon="📊"
             title="Count"
             subtitle="Anonymously"
-            delay={1.8}
+            delay={5}
             isLast
           />
         </div>

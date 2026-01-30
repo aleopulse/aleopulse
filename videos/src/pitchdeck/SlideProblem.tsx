@@ -87,7 +87,8 @@ export const SlideProblem: React.FC = () => {
     extrapolateRight: "clamp",
   });
 
-  const statsOpacity = interpolate(frame, [fps * 4, fps * 5], [0, 1], {
+  // Stats appear when "$2.1 billion in privacy fines" is mentioned (~12s into slide)
+  const statsOpacity = interpolate(frame, [fps * 12, fps * 13], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -144,23 +145,27 @@ export const SlideProblem: React.FC = () => {
             width: "100%",
           }}
         >
+          {/* Synced with voiceover (18s total):
+              0-4s: "Traditional survey platforms...IP address and digital fingerprint"
+              4-9s: "26% of employees fear retaliation..."
+              9-12s: "after data breaches more than half..." */}
           <ProblemCard
             icon="🔓"
             title="False Anonymity"
             description="IP addresses & device fingerprints stored by every platform"
-            delay={0.8}
+            delay={0.5}
           />
           <ProblemCard
             icon="😰"
             title="Response Bias"
             description="26% of employees fear retaliation from 'anonymous' feedback"
-            delay={1.2}
+            delay={4}
           />
           <ProblemCard
             icon="💔"
             title="Data Breaches"
             description="50%+ of consumers avoid companies after breaches"
-            delay={1.6}
+            delay={9}
           />
         </div>
 

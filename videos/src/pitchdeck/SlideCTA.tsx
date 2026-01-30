@@ -21,17 +21,21 @@ export const SlideCTA: React.FC = () => {
     config: { damping: 12, stiffness: 80 },
   });
 
-  const taglineOpacity = interpolate(frame, [fps * 0.8, fps * 1.3], [0, 1], {
+  // Synced with voiceover (12s total):
+  // 0-5s: "Privacy matters...Join us in building the future of honest feedback"
+  // 5-16s: "Visit aleo.dpolls.ai, Aleo Pulse where every opinion is valued without sacrificing privacy."
+  const taglineOpacity = interpolate(frame, [fps * 3, fps * 4], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  const taglineY = interpolate(frame, [fps * 0.8, fps * 1.3], [20, 0], {
+  const taglineY = interpolate(frame, [fps * 3, fps * 4], [20, 0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
-  const contactOpacity = interpolate(frame, [fps * 1.5, fps * 2], [0, 1], {
+  // Contact appears when "aleo.dpolls.ai" is mentioned (~9s)
+  const contactOpacity = interpolate(frame, [fps * 9, fps * 10], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
@@ -109,7 +113,7 @@ export const SlideCTA: React.FC = () => {
               textShadow: `0 0 80px rgba(99, 102, 241, ${glowIntensity})`,
             }}
           >
-            LeoPulse
+            AleoPulse
           </div>
         </div>
 
@@ -133,9 +137,9 @@ export const SlideCTA: React.FC = () => {
               fontStyle: "italic",
             }}
           >
-            "Where your voice is heard,
+            "Where every opinion is valued
             <br />
-            <span style={{ color: "#8b5cf6", fontWeight: 600 }}>but your identity isn't.</span>"
+            <span style={{ color: "#8b5cf6", fontWeight: 600 }}>without sacrificing privacy.</span>"
           </div>
         </div>
 
@@ -148,9 +152,7 @@ export const SlideCTA: React.FC = () => {
             marginTop: 20,
           }}
         >
-          <ContactItem icon="🌐" text="leopulse.io" />
-          <ContactItem icon="✉️" text="team@leopulse.io" />
-          <ContactItem icon="𝕏" text="@leopulse" />
+          <ContactItem icon="🌐" text="aleo.dpolls.ai" />
         </div>
       </div>
     </AbsoluteFill>

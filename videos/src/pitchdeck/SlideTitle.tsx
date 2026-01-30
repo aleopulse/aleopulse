@@ -10,35 +10,42 @@ export const SlideTitle: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
-  // Dramatic reveal animation
-  const hookOpacity = interpolate(frame, [fps * 0.3, fps * 0.8], [0, 1], {
+  // Synced with voiceover (14s total):
+  // 0-4s: "94% of consumers say they won't buy..."
+  // 4-9s: "Yet every day billions of survey responses..."
+  // 9-14s: "...Aleo Pulse changes that."
+
+  // Stat appears first (matches voiceover starting with "94%")
+  const statOpacity = interpolate(frame, [fps * 0.3, fps * 0.8], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const statY = interpolate(frame, [fps * 0.3, fps * 0.8], [30, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  // Hook statement appears after stat is established
+  const hookOpacity = interpolate(frame, [fps * 4, fps * 4.5], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   const hookScale = spring({
-    frame: frame - fps * 0.3,
+    frame: frame - fps * 4,
     fps,
     config: { damping: 12, stiffness: 80 },
   });
 
-  const statOpacity = interpolate(frame, [fps * 1.5, fps * 2], [0, 1], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-
-  const statY = interpolate(frame, [fps * 1.5, fps * 2], [30, 0], {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-  });
-
-  const logoOpacity = interpolate(frame, [fps * 3, fps * 3.5], [0, 1], {
+  // Logo appears when "Aleo Pulse changes that" is said (~10s)
+  const logoOpacity = interpolate(frame, [fps * 10, fps * 10.5], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   const logoScale = spring({
-    frame: frame - fps * 3,
+    frame: frame - fps * 10,
     fps,
     config: { damping: 15, stiffness: 100 },
   });
@@ -127,7 +134,7 @@ export const SlideTitle: React.FC = () => {
               letterSpacing: -2,
             }}
           >
-            LeoPulse
+            AleoPulse
           </div>
           <div
             style={{

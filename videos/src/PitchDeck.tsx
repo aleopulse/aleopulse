@@ -8,15 +8,15 @@ import { SlideTraction } from "./pitchdeck/SlideTraction";
 import { SlideCTA } from "./pitchdeck/SlideCTA";
 
 // Scene timings (in seconds) - synced with voiceover transcript timestamps
-// Total: ~150 seconds (2:30)
+// Total: ~133 seconds (2:13) - matches pitchdeck_v2.mp3 duration (132.6s)
 const TIMINGS = {
-  title: { start: 0, duration: 15 },         // [0.00s - 15.00s] Hook + LeoPulse intro
-  problem: { start: 15, duration: 25 },      // [15.00s - 40.00s] Trust crisis
-  market: { start: 40, duration: 25 },       // [40.00s - 65.00s] Market opportunity
-  solution: { start: 65, duration: 30 },     // [65.00s - 95.00s] LeoPulse solution
-  howItWorks: { start: 95, duration: 25 },   // [95.00s - 120.00s] ZK flow explanation
-  traction: { start: 120, duration: 20 },    // [120.00s - 140.00s] Traction & roadmap
-  cta: { start: 140, duration: 10 },         // [140.00s - 150.00s] Call to action
+  title: { start: 0, duration: 14 },         // [0.00s - 14.00s] Hook: "94% of consumers..." + "Aleo Pulse changes that"
+  problem: { start: 14, duration: 18 },      // [14.00s - 32.00s] Trust crisis, privacy stats, "trust is broken"
+  market: { start: 32, duration: 23 },       // [32.00s - 55.00s] $4B→$12B market, converging markets
+  solution: { start: 55, duration: 20 },     // [55.00s - 75.00s] ZK-proven anonymity, on-chain verification
+  howItWorks: { start: 75, duration: 18 },   // [75.00s - 93.00s] ZK proof flow: "Here's how it works..."
+  traction: { start: 93, duration: 24 },     // [93.00s - 117.00s] Live on testnet, roadmap, Aleo backing
+  cta: { start: 117, duration: 16 },         // [117.00s - 133.00s] "Join us", aleo.dpolls.ai tagline
 };
 
 export const PitchDeck: React.FC = () => {
@@ -26,8 +26,8 @@ export const PitchDeck: React.FC = () => {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#0a0a0a" }}>
-      {/* Voiceover audio track - uncomment when audio is generated */}
-      {/* <Audio src={staticFile("audio/pitchdeck.mp3")} /> */}
+      {/* Voiceover audio track */}
+      <Audio src={staticFile("audio/pitchdeck_v2.mp3")} />
 
       {/* Slide 1: Title & Hook */}
       <Sequence
